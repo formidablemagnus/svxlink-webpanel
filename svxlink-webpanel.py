@@ -31,89 +31,100 @@ PAGE = r"""<!doctype html>
 <html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SvxLink Control</title>
 <style>
-:root{color-scheme:dark;--bg:#0b1220;--panel:#131e30;--line:#26364d;--text:#e7edf6;--muted:#9baec6;--green:#55d6a0;--red:#ff7d86;--amber:#ffd166}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,-apple-system,Segoe UI,sans-serif}
-main{max-width:1200px;margin:auto;padding:22px}header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
-h1{font-size:1.55rem;margin:0}h2{font-size:1rem;margin:0 0 14px}.muted{color:var(--muted);font-size:.88rem}
-.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px;margin-bottom:14px}
-.k{color:var(--muted);font-size:.82rem}.v{font-size:1.35rem;font-weight:700;margin-top:5px;overflow-wrap:anywhere}
-.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--amber);margin-right:8px}.ok{background:var(--green)}.bad{background:var(--red)}
-.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}input,select,button{background:#0b1424;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:9px 11px;font:inherit}
-button{cursor:pointer}button:hover{border-color:#6b89b2}input{flex:1;min-width:170px}
-.log{height:55vh;min-height:300px;overflow:auto;background:#080e18;border:1px solid var(--line);border-radius:9px;padding:12px;font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
-.logline{padding:2px 0;border-bottom:1px solid #152033}.warn{color:var(--amber)}.err{color:var(--red)}.event{color:#8dc7ff}
+:root{color-scheme:dark;--bg:#09111f;--panel:#111d2e;--panel-raised:#16243a;--line:#293b55;--text:#edf3fb;--muted:#a1b2c8;--green:#59dfa8;--red:#ff8189;--amber:#ffd166;--blue:#83bdff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% -25%,#1a2c46 0,transparent 55%),var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:1180px;margin:auto;padding:28px 24px 36px}header{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+h1{font-size:1.65rem;letter-spacing:-.03em;margin:0}h2{font-size:1rem;letter-spacing:.01em;margin:0 0 8px}.muted{color:var(--muted);font-size:.88rem}
+.header-meta{text-align:right}.status-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;background:linear-gradient(110deg,#142943,#111d2e 70%);border:1px solid #304966;border-radius:14px;padding:15px 18px;margin-bottom:16px}
+.status-caption,.k{color:var(--muted);font-size:.78rem;font-weight:650;letter-spacing:.06em;text-transform:uppercase}.status-value{font-weight:750;font-size:1.08rem;margin-top:2px}.status-right{text-align:right}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.card{background:linear-gradient(145deg,var(--panel-raised),var(--panel) 70%);border:1px solid var(--line);border-radius:14px;padding:17px;margin-bottom:14px;box-shadow:0 8px 24px #02081224}
+.summary-card{min-height:112px}.summary-card.featured{border-color:#385a7b;background:linear-gradient(145deg,#1b3551,#142238)}.k{letter-spacing:.035em;text-transform:none}.v{font-size:1.2rem;font-weight:720;margin-top:8px;overflow-wrap:anywhere;line-height:1.3}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--amber);margin-right:9px;box-shadow:0 0 12px currentColor}.ok{background:var(--green);color:var(--green)}.bad{background:var(--red);color:var(--red)}
+.toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:14px 0 10px}input,select,button{background:#0b1525;border:1px solid var(--line);color:var(--text);border-radius:9px;padding:10px 12px;font:inherit;min-height:42px}
+button{cursor:pointer;transition:border-color .15s ease,background-color .15s ease,transform .15s ease}button:hover{border-color:#7399c4;background:#182942}button:active{transform:translateY(1px)}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #83bdff;outline-offset:2px}
+input{flex:1;min-width:180px}input::placeholder{color:#8296af}.section-intro{max-width:780px}.tg-buttons{display:flex;flex-wrap:wrap;gap:9px;margin-top:16px}.tg-button{display:inline-flex;align-items:center;gap:7px}.tg-button[aria-pressed="true"]{border-color:var(--blue);background:#173251}.tg-button.tx{border-color:#4f987f}
+.badge{display:inline-flex;align-items:center;border-radius:99px;padding:2px 7px;font-size:.72rem;font-weight:750;letter-spacing:.03em;background:#20344d;color:#c9d8e9}.badge.tx{background:#174733;color:#a6f1cc}.section-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.danger-area{border-top:1px solid var(--line);padding-top:14px;margin-top:17px}.danger-button{border-color:#9b4d59;color:#ff9da3;background:#2a1821}.danger-button:hover{border-color:var(--red);background:#3a1e28}
+.admin-panel{background:#0c1727;border:1px solid var(--line);border-radius:11px;padding:16px;margin:14px 0}.admin-row{align-items:center}.status-message{min-height:1.4em;margin-top:10px}
+.log-toolbar{display:grid;grid-template-columns:minmax(180px,1fr) minmax(155px,.45fr) auto;align-items:center;gap:9px;margin:14px 0 9px}.log-toolbar input{width:100%}.log-count{margin-left:auto}
+.log{height:55vh;min-height:300px;overflow:auto;background:#080e18;border:1px solid var(--line);border-radius:10px;padding:13px;font:12px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+.logline{padding:3px 7px;border-bottom:1px solid #152033;border-left:2px solid transparent}.logline.warn{color:var(--amber);border-left-color:var(--amber)}.logline.err{color:var(--red);border-left-color:var(--red)}.logline.event{color:var(--blue);border-left-color:var(--blue)}
 footer{color:var(--muted);font-size:.8rem;margin-top:12px}
-@media(max-width:700px){main{padding:13px}.grid{grid-template-columns:1fr}.v{font-size:1.2rem}.log{height:50vh}}
+@media(max-width:800px){main{padding:20px 16px 28px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.log-toolbar{grid-template-columns:1fr 1fr}.log-toolbar input{grid-column:1/-1}.log-toolbar .log-count{grid-column:1/-1;margin:0}}
+@media(max-width:520px){main{padding:14px 12px 24px}h1{font-size:1.45rem}.header-meta{text-align:left}.status-banner{align-items:flex-start;flex-direction:column;gap:10px}.status-right{text-align:left}.grid{grid-template-columns:1fr 1fr;gap:8px}.card{padding:14px;margin-bottom:10px}.summary-card{min-height:104px}.v{font-size:1.08rem}.toolbar{gap:7px}.toolbar>*{min-height:44px}.toolbar input{min-width:100%;width:100%}.log-toolbar{grid-template-columns:1fr}.log-toolbar input{grid-column:auto}.log-toolbar .log-count{grid-column:auto}.log{height:50vh;min-height:260px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
 </style></head><body><main>
-<header><div><h1>SvxLink Control</h1><div class="muted">Status, händelser och loggar</div></div><div class="muted">Uppdateras automatiskt</div></header>
+<header><div><h1>SvxLink Control</h1><div class="muted">Status, händelser och loggar</div></div><div class="header-meta muted">Uppdateras automatiskt<br>Var 5:e sekund</div></header>
+<section class="status-banner" aria-label="Tjänstestatus"><div><div class="status-caption">SvxLink-tjänst</div><div class="status-value" id="service"><span class="dot" aria-hidden="true"></span>Hämtar…</div></div><div class="status-right"><div class="status-caption">Senast uppdaterad</div><div class="status-value" id="status-updated">Väntar…</div></div></section>
 <div class="grid">
-<section class="card"><div class="k">SvxLink-tjänst</div><div class="v" id="service"><span class="dot"></span>Hämtar…</div></section>
-<section class="card"><div class="k">Senaste talgruppshändelse</div><div class="v" id="tg">—</div><div class="muted" id="tgtime"></div></section>
-<section class="card"><div class="k">Aktuell vald talgrupp</div><div class="v" id="currenttg">Okänd</div><div class="muted">Baserad på senaste ”Selecting TG” i loggen</div></section>
-<section class="card"><div class="k">Senaste reflektorhändelse</div><div class="v" id="node">—</div><div class="muted" id="nodetime"></div></section>
-<section class="card"><div class="k">Loggöversikt</div><div class="v" id="counts">—</div><div class="muted" id="countdetail">Fel · varningar · händelser</div></section>
+<section class="card summary-card featured"><div class="k">Aktuell vald talgrupp</div><div class="v" id="currenttg">Okänd</div><div class="muted">Baserad på senaste ”Selecting TG” i loggen</div></section>
+<section class="card summary-card"><div class="k">Senaste talgruppshändelse</div><div class="v" id="tg">—</div><div class="muted" id="tgtime"></div></section>
+<section class="card summary-card"><div class="k">Senaste reflektorhändelse</div><div class="v" id="node">—</div><div class="muted" id="nodetime"></div></section>
+<section class="card summary-card"><div class="k">Loggöversikt</div><div class="v" id="counts">—</div><div class="muted">Fel · varningar · händelser</div></section>
 </div>
-<section class="card"><h2>Talgrupper på reflektorn</h2>
-<div class="muted" style="margin-bottom:10px">Talgrupper som noder har valt just nu. TX anger noder som rapporterar pågående sändning. Klicka för att välja talgrupp.</div>
-<div class="toolbar" id="dynamic-tg-buttons"><span class="muted">Hämtar reflektorstatus…</span></div>
-<div class="muted" id="reflector-updated"></div>
+<section class="card"><div class="section-heading"><div><h2>Talgrupper på reflektorn</h2>
+<div class="muted section-intro">Överblick över vad noderna lyssnar på just nu. TX visar noder som rapporterar pågående sändning.</div></div>
+<div class="badge" id="reflector-nodes">Hämtar…</div></div>
+<div class="tg-buttons" id="dynamic-tg-buttons" aria-label="Aktiva talgrupper"><span class="muted">Hämtar reflektorstatus…</span></div>
+<div class="muted status-message" id="reflector-updated" role="status" aria-live="polite"></div>
 </section>
 <section class="card"><h2>Styrning</h2>
-<div class="muted" style="margin-bottom:10px">Välj en sparad snabbknapp eller koppla från reflektorn. Kommandon skickas direkt.</div>
-<div class="toolbar" id="tgbuttons"></div>
-<div class="toolbar">
-<button id="managebuttons">Administrera knappar</button>
-<button id="disconnect" style="border-color:var(--red);color:var(--red)">Koppla från reflektorn</button>
-</div>
-<div id="buttonadmin" class="card" style="display:none;margin-top:10px">
+<div class="muted">Välj ett snabbval för att skicka ett kommando till SvxLink.</div>
+<div class="toolbar" id="tgbuttons" aria-label="Sparade snabbval"></div>
+<div class="toolbar"><button id="managebuttons" type="button">Administrera snabbval</button></div>
+<div id="buttonadmin" class="admin-panel" style="display:none">
 <h2>Administrera DTMF-knappar</h2>
 <div class="muted">Lägg till, ändra eller ta bort snabbknappar. Kommandon skickas direkt när du trycker på knappen.</div>
 <div id="buttonrows"></div>
-<div class="toolbar"><button id="addbutton">Lägg till knapp</button><button id="savebuttons">Spara knappar</button><button id="cancelbuttons">Stäng</button></div>
-<div class="muted" id="adminresult" role="status"></div>
+<div class="toolbar"><button id="addbutton" type="button">Lägg till knapp</button><button id="savebuttons" type="button">Spara knappar</button><button id="cancelbuttons" type="button">Stäng</button></div>
+<div class="muted status-message" id="adminresult" role="status" aria-live="polite"></div>
 </div>
-<div class="toolbar" style="margin-top:10px">
+<div class="toolbar">
 <input id="customdtmf" maxlength="20" placeholder="Eget DTMF-kommando (0–9, * och #)" aria-label="Eget DTMF-kommando">
-<button id="senddtmf">Skicka DTMF</button>
+<button id="senddtmf" type="button">Skicka DTMF</button>
 </div>
 <div class="muted">Endast siffrorna 0–9 samt * och # tillåts, högst 20 tecken.</div>
-<div class="muted" id="commandresult" role="status"></div></section>
-<section class="card"><h2>Loggar</h2><div class="toolbar">
-<input id="filter" placeholder="Filtrera loggar (t.ex. UDP, ERROR, SA7MHN)">
-<select id="kind"><option value="all">Alla nivåer</option><option value="error">Fel</option><option value="warn">Varningar</option><option value="event">Reflektor / talgrupp</option></select>
-<button id="refresh">Uppdatera nu</button></div><div class="log" id="logs">Hämtar loggar…</div>
+<div class="muted status-message" id="commandresult" role="status" aria-live="polite"></div>
+<div class="danger-area"><div class="muted">Frånkoppling lämnar den aktuella reflektorn.</div><div class="toolbar"><button id="disconnect" class="danger-button" type="button">Koppla från reflektorn</button></div></div></section>
+<section class="card"><div class="section-heading"><div><h2>Loggar</h2><div class="muted">Senaste händelser från SvxLink-tjänsten</div></div><div class="badge log-count" id="log-count" aria-live="polite">0 träffar</div></div><div class="log-toolbar">
+<input id="filter" placeholder="Sök i loggar (t.ex. UDP, ERROR, SA7MHN)" aria-label="Sök i loggar">
+<select id="kind" aria-label="Filtrera loggnivå"><option value="all">Alla nivåer</option><option value="error">Fel</option><option value="warn">Varningar</option><option value="event">Reflektor / talgrupp</option></select>
+<button id="refresh" type="button">Uppdatera nu</button></div><div class="log" id="logs" role="log" aria-live="polite">Hämtar loggar…</div>
 <footer id="updated">Väntar på första uppdateringen.</footer></section>
-<footer>Denna panel skickar inga kommandon till radion. Loggstatus kan släpa efter faktisk aktivitet.</footer>
+<footer>Denna panel skickar kommandon till SvxLink men styr inte radion direkt. Loggstatus kan släpa efter faktisk aktivitet.</footer>
 </main><script>
 const $=id=>document.getElementById(id);
 function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-let allLines=[];
+let allLines=[],currentTG='';
 function level(s){if(/ERROR|FATAL|CRITICAL/i.test(s))return'err';if(/WARNING|UDP frame\(s\) lost/i.test(s))return'warn';if(/ReflectorLogic|Talker start|Talker stop|Node joined|Node left|Selecting TG/i.test(s))return'event';return'';}
 function renderLogs(){const f=$('filter').value.toLowerCase(),k=$('kind').value;
  const filtered=allLines.filter(s=>(!f||s.toLowerCase().includes(f))&&(k==='all'||(k==='error'&&level(s)==='err')||(k==='warn'&&level(s)==='warn')||(k==='event'&&level(s)==='event')));
  $('logs').innerHTML=filtered.slice().reverse().map(s=>'<div class="logline '+level(s)+'">'+esc(s)+'</div>').join('')||'Inga loggrader matchar filtret.';
+ $('log-count').textContent=filtered.length+' träff'+(filtered.length===1?'':'ar');
  }
 async function update(){try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);const d=await r.json();
  $('service').innerHTML='<span class="dot '+(d.active?'ok':'bad')+'"></span>'+esc(d.service_status);
  $('tg').textContent=d.tg_event||'Ingen identifierad händelse';$('tgtime').textContent=d.tg_time||'';
- $('currenttg').textContent=d.current_tg ? ('TG '+d.current_tg) : 'Okänd';
+ currentTG=d.current_tg||'';$('currenttg').textContent=currentTG ? ('TG '+currentTG) : 'Okänd';
+ document.querySelectorAll('[data-live-tg]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.liveTg)===String(currentTG)));
  $('node').textContent=d.node_event||'Ingen identifierad händelse';$('nodetime').textContent=d.node_time||'';
  $('counts').textContent=d.errors+' · '+d.warnings+' · '+d.events;
- allLines=d.lines||[];renderLogs();$('updated').textContent='Uppdaterad '+new Date().toLocaleTimeString('sv-SE')+' · visar '+allLines.length+' senaste loggrader';
- }catch(e){$('service').innerHTML='<span class="dot bad"></span>Kan inte läsa status';$('updated').textContent='Fel vid uppdatering: '+e.message;}}
+ allLines=d.lines||[];renderLogs();const now=new Date().toLocaleTimeString('sv-SE');$('status-updated').textContent=now;$('updated').textContent='Uppdaterad '+now+' · visar '+allLines.length+' senaste loggrader';
+ }catch(e){$('service').innerHTML='<span class="dot bad"></span>Kan inte läsa status';$('status-updated').textContent='Fel';$('updated').textContent='Fel vid uppdatering: '+e.message;}}
 async function updateReflector(){
  try{
   const r=await fetch('/api/reflector',{cache:'no-store'});const d=await r.json();
   if(!r.ok||!d.ok)throw Error(d.error||('HTTP '+r.status));
   const groups=d.talkgroups||[];
-  $('dynamic-tg-buttons').innerHTML=groups.length?groups.map(tg=>'<button data-live-tg="'+esc(String(tg.tg))+'">TG '+esc(String(tg.tg))+' · '+tg.nodes+' nod'+(tg.nodes===1?'':'er')+(tg.talkers?' · TX '+tg.talkers:'')+'</button>').join(''):'<span class="muted">Inga noder har valt en talgrupp över 0 just nu.</span>';
+  $('dynamic-tg-buttons').innerHTML=groups.length?groups.map(tg=>'<button class="tg-button'+(tg.talkers?' tx':'')+'" type="button" data-live-tg="'+esc(String(tg.tg))+'" aria-pressed="'+(String(tg.tg)===String(currentTG))+'" aria-label="Välj talgrupp '+esc(String(tg.tg))+', '+tg.nodes+' noder'+(tg.talkers?', '+tg.talkers+' sänder':'')+'">TG '+esc(String(tg.tg))+'<span class="badge">'+tg.nodes+' nod'+(tg.nodes===1?'':'er')+'</span>'+(tg.talkers?'<span class="badge tx">TX '+tg.talkers+'</span>':'')+'</button>').join(''):'<span class="muted">Inga noder har valt en talgrupp över 0 just nu.</span>';
   $('dynamic-tg-buttons').querySelectorAll('[data-live-tg]').forEach(el=>el.addEventListener('click',()=>sendCommand('tg:'+el.dataset.liveTg)));
-  $('reflector-updated').textContent='Reflektorstatus uppdaterad '+new Date().toLocaleTimeString('sv-SE')+' · '+d.node_count+' synliga noder';
- }catch(e){$('dynamic-tg-buttons').innerHTML='<span class="muted">Kunde inte läsa reflektorstatus: '+esc(e.message)+'</span>';}
+  $('reflector-nodes').textContent=d.node_count+' synliga noder';
+  $('reflector-updated').textContent='Uppdaterad '+new Date().toLocaleTimeString('sv-SE');
+ }catch(e){$('reflector-nodes').textContent='Status saknas';$('dynamic-tg-buttons').innerHTML='<span class="muted">Kunde inte läsa reflektorstatus: '+esc(e.message)+'</span>';}
 }
 let buttonDefinitions=[];
-function renderCommandButtons(){ $('tgbuttons').innerHTML=buttonDefinitions.map((b,i)=>'<button data-command-index="'+i+'">'+esc(b.label)+'</button>').join('');$('tgbuttons').querySelectorAll('[data-command-index]').forEach(el=>el.addEventListener('click',()=>sendCommand('dtmf:'+buttonDefinitions[Number(el.dataset.commandIndex)].command))); }
-function renderAdmin(){ $('buttonrows').innerHTML=buttonDefinitions.map((b,i)=>'<div class="toolbar" style="align-items:center"><input data-label="'+i+'" maxlength="40" placeholder="Knappnamn" value="'+esc(b.label)+'"><input data-code="'+i+'" maxlength="20" placeholder="DTMF" value="'+esc(b.command)+'"><button data-delete="'+i+'">Ta bort</button></div>').join(''); $('buttonrows').querySelectorAll('[data-delete]').forEach(el=>el.addEventListener('click',()=>{buttonDefinitions.splice(Number(el.dataset.delete),1);renderAdmin();})); }
+function renderCommandButtons(){ $('tgbuttons').innerHTML=buttonDefinitions.map((b,i)=>'<button type="button" data-command-index="'+i+'">'+esc(b.label)+'</button>').join('');$('tgbuttons').querySelectorAll('[data-command-index]').forEach(el=>el.addEventListener('click',()=>sendCommand('dtmf:'+buttonDefinitions[Number(el.dataset.commandIndex)].command))); }
+function renderAdmin(){ $('buttonrows').innerHTML=buttonDefinitions.map((b,i)=>'<div class="toolbar admin-row"><input data-label="'+i+'" maxlength="40" placeholder="Knappnamn" aria-label="Knappnamn '+(i+1)+'" value="'+esc(b.label)+'"><input data-code="'+i+'" maxlength="20" placeholder="DTMF" aria-label="DTMF-kommando '+(i+1)+'" value="'+esc(b.command)+'"><button type="button" data-delete="'+i+'">Ta bort</button></div>').join(''); $('buttonrows').querySelectorAll('[data-delete]').forEach(el=>el.addEventListener('click',()=>{buttonDefinitions.splice(Number(el.dataset.delete),1);renderAdmin();})); }
 async function loadButtons(){try{const r=await fetch('/api/buttons',{cache:'no-store'});const d=await r.json();if(!r.ok)throw Error(d.error||'Kunde inte läsa knappar');buttonDefinitions=d.buttons||[];renderCommandButtons();}catch(e){$('commandresult').textContent='Kunde inte läsa snabbknappar: '+e.message;}}
 async function saveButtons(){const rows=[...$('buttonrows').querySelectorAll('[data-label]')];const next=rows.map(el=>({label:el.value,command:$('buttonrows').querySelector('[data-code="'+el.dataset.label+'"]').value}));try{const r=await fetch('/api/buttons',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({buttons:next}),cache:'no-store'});const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'Kunde inte spara');buttonDefinitions=d.buttons;renderCommandButtons();renderAdmin();$('adminresult').textContent='Knapparna sparades.';}catch(e){$('adminresult').textContent='Fel: '+e.message;}}
 async function sendCommand(action){const result=$('commandresult');result.textContent='Skickar kommando…';
@@ -122,7 +133,7 @@ async function sendCommand(action){const result=$('commandresult');result.textCo
  setTimeout(update,700);
  }catch(e){result.textContent='Kunde inte skicka kommandot: '+e.message;}}
 document.querySelectorAll('[data-tg]').forEach(b=>b.addEventListener('click',()=>sendCommand('tg:'+b.dataset.tg)));
-$('disconnect').addEventListener('click',()=>sendCommand('disconnect'));
+$('disconnect').addEventListener('click',()=>{if(window.confirm('Vill du koppla från den aktuella reflektorn?'))sendCommand('disconnect');});
 $('managebuttons').addEventListener('click',()=>{$('buttonadmin').style.display=$('buttonadmin').style.display==='none'?'block':'none';renderAdmin();});
 $('addbutton').addEventListener('click',()=>{buttonDefinitions.push({label:'Ny knapp',command:''});renderAdmin();});
 $('savebuttons').addEventListener('click',saveButtons);
