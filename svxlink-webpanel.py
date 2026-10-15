@@ -29,7 +29,7 @@ REFLECTOR_PROXY_URL = os.environ.get("SVXLINK_REFLECTOR_PROXY_URL", "https://ref
 
 PAGE = r"""<!doctype html>
 <html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SvxLink Control</title>
+<title>SvxLink Control v1.2</title>
 <style>
 :root{color-scheme:dark;--bg:#09111f;--panel:#111d2e;--panel-raised:#16243a;--line:#293b55;--text:#edf3fb;--muted:#a1b2c8;--green:#59dfa8;--red:#ff8189;--amber:#ffd166;--blue:#83bdff}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% -25%,#1a2c46 0,transparent 55%),var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
@@ -54,7 +54,7 @@ footer{color:var(--muted);font-size:.8rem;margin-top:12px}
 @media(max-width:520px){main{padding:14px 12px 24px}h1{font-size:1.45rem}.header-meta{text-align:left}.status-banner{align-items:flex-start;flex-direction:column;gap:10px}.status-right{text-align:left}.grid{grid-template-columns:1fr 1fr;gap:8px}.card{padding:14px;margin-bottom:10px}.summary-card{min-height:104px}.v{font-size:1.08rem}.toolbar{gap:7px}.toolbar>*{min-height:44px}.toolbar input{min-width:100%;width:100%}.log-toolbar{grid-template-columns:1fr}.log-toolbar input{grid-column:auto}.log-toolbar .log-count{grid-column:auto}.log{height:50vh;min-height:260px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
 </style></head><body><main>
-<header><div><h1>SvxLink Control</h1><div class="muted">Status, händelser och loggar</div></div><div class="header-meta muted">Uppdateras automatiskt<br>Var 5:e sekund</div></header>
+<header><div><h1>SvxLink Control <span class="muted">v1.2</span></h1><div class="muted">Status, händelser och loggar</div></div><div class="header-meta muted">Uppdateras automatiskt<br>Var 5:e sekund</div></header>
 <section class="status-banner" aria-label="Tjänstestatus"><div><div class="status-caption">SvxLink-tjänst</div><div class="status-value" id="service"><span class="dot" aria-hidden="true"></span>Hämtar…</div></div><div class="status-right"><div class="status-caption">Senast uppdaterad</div><div class="status-value" id="status-updated">Väntar…</div></div></section>
 <div class="grid">
 <section class="card summary-card featured"><div class="k">Aktuell vald talgrupp</div><div class="v" id="currenttg">Okänd</div><div class="muted">Baserad på senaste ”Selecting TG” i loggen</div></section>
