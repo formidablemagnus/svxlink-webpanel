@@ -54,13 +54,39 @@ else
 fi
 
 if [[ ! -e "$ENV_FILE" ]]; then
-  # URL-safe password to avoid systemd EnvironmentFile quoting problems.
+  # Preserve systemd EnvironmentFile compatibility with URL-safe credentials.
   PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))' | tr -d '=')"
+  if [[ ! -r /dev/tty ]]; then
+    echo "Installationen behöver en interaktiv terminal för att fråga efter inloggningsuppgifter." >&2
+    exit 1
+  fi
+  while true; do
+    read -r -p "Välj användarnamn (1–64 tecken: A–Z, a–z, 0–9, punkt, _ eller -): " USERNAME </dev/tty
+    if [[ "$USERNAME" =~ ^[A-Za-z0-9._-]{1,64}$ ]]; then
+      break
+    fi
+    echo "Användarnamnet har ogiltigt format." >&2
+  done
+  while true; do
+    read -r -s -p "Välj lösenord (12–128 tecken: A–Z, a–z, 0–9, _ eller -): " PASSWORD </dev/tty
+    echo
+    if [[ ! "$PASSWORD" =~ ^[A-Za-z0-9_-]{12,128}$ ]]; then
+      echo "Lösenordet måste vara 12–128 tecken och endast innehålla A–Z, a–z, 0–9, _ eller -." >&2
+      continue
+    fi
+    read -r -s -p "Bekräfta lösenordet: " PASSWORD_CONFIRM </dev/tty
+    echo
+    if [[ "$PASSWORD" == "$PASSWORD_CONFIRM" ]]; then
+      unset PASSWORD_CONFIRM
+      break
+    fi
+    echo "Lösenorden matchar inte. Försök igen." >&2
+  done
   cat > "$ENV_FILE" <<EOF_ENV
 # SvxLink Web Panel settings. Keep this file private.
-SVXLINK_WEB_HOST=127.0.0.1
+SVXLINK_WEB_HOST=0.0.0.0
 SVXLINK_WEB_PORT=8090
-SVXLINK_WEB_USER=admin
+SVXLINK_WEB_USER=$USERNAME
 SVXLINK_WEB_PASSWORD=$PASSWORD
 SVXLINK_LOGFILE=/var/log/svxlink
 SVXLINK_SERVICE=svxlink
@@ -70,13 +96,18 @@ EOF_ENV
   chmod 0640 "$ENV_FILE"
   chown root:svxlink "$ENV_FILE"
   echo
-  echo "En unikt lösenord har skapats. Spara det nu:"
-  echo "Användarnamn: admin"
-  echo "Lösenord: $PASSWORD"
-  echo "Lösenordet finns även i $ENV_FILE (root:svxlink, 0640)."
+  echo "Dina inloggningsuppgifter har sparats i $ENV_FILE (root:svxlink, 0640)."
   echo
+  unset PASSWORD
 else
   echo "Behåller befintlig konfiguration i $ENV_FILE."
+  if grep -q '^SVXLINK_WEB_HOST=' "$ENV_FILE"; then
+    sed -i 's/^SVXLINK_WEB_HOST=.*/SVXLINK_WEB_HOST=0.0.0.0/' "$ENV_FILE"
+  else
+    printf '\nSVXLINK_WEB_HOST=0.0.0.0\n' >> "$ENV_FILE"
+  fi
+  chmod 0640 "$ENV_FILE"
+  chown root:svxlink "$ENV_FILE"
 fi
 
 cat > "$SERVICE_FILE" <<'EOF_SERVICE'
@@ -125,13 +156,14 @@ fi
 cat <<'EOF_DONE'
 
 Standardinställning:
-  Lyssnar endast på 127.0.0.1:8090 (lämpligt när NGINX kör på samma maskin).
+  Lyssnar på alla IPv4-adresser på port 8090.
+  Begränsa åtkomsten med brandvägg och använd HTTPS via en betrodd proxy.
+  Konfigurationsfil: /etc/default/svxlink-webpanel
   Grundläggande kontroll:
     systemctl status svxlink-webpanel.service
     journalctl -u svxlink-webpanel.service -n 50 --no-pager
     curl -I http://127.0.0.1:8090/
 
-Om NGINX kör på en annan server: ändra SVXLINK_WEB_HOST till nodens LAN-IP i
-/etc/default/svxlink-webpanel och begränsa port 8090 till proxyserverns IP med brandvägg.
-Ändra inte till 0.0.0.0 utan att begränsa nätverksåtkomsten. HTTPS hanteras normalt av NGINX.
+Skydda port 8090 så att endast avsedda klienter eller proxyservrar når den.
+HTTPS hanteras normalt av NGINX.
 EOF_DONE

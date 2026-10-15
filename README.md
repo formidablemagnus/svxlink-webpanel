@@ -24,25 +24,25 @@ Installationsscriptet:
 
 - installerar programmet i `/usr/local/bin/svxlink-webpanel.py`
 - skapar systemd-tjänsten `svxlink-webpanel.service`
-- skapar en unik inloggning om ingen konfiguration finns
+- frågar efter användarnamn och lösenord om ingen konfiguration finns
+- binder tjänsten till alla IPv4-adresser på port 8090
 - sparar inställningar i `/etc/default/svxlink-webpanel`
 - sparar snabbknappar i `/var/lib/svxlink/webpanel-buttons.json`
 - aktiverar och startar tjänsten
+- visar sökvägen till konfigurationsfilen när installationen är klar
 
-**Spara lösenordet som visas vid första installationen.** Om konfigurationsfilen redan finns behålls den.
+Användarnamnet måste vara 1–64 tecken och endast innehålla bokstäver, siffror, punkt, `_` eller `-`. Lösenordet måste vara 12–128 tecken och endast innehålla bokstäver, siffror, `_` eller `-`. Lösenordet skrivs inte ut i terminalen. Om konfigurationsfilen redan finns behålls inloggningsuppgifterna, men lyssningsadressen sätts till `0.0.0.0`.
 
 ## NGINX Proxy Manager / NGINX
 
-Standard är `127.0.0.1:8090`, avsett för en proxy på samma maskin. Lägg till en proxy host med:
+Tjänsten lyssnar på alla IPv4-adresser på port `8090`. Lägg till en proxy host med:
 
 - Forward hostname/IP: `127.0.0.1`
 - Forward port: `8090`
 - Scheme: `http`
 - Websockets: normalt inte nödvändigt
 
-Låt NGINX hantera HTTPS-certifikatet. Behåll autentiseringen i panelen också.
-
-Om proxyn kör på en annan server ska `SVXLINK_WEB_HOST` ändras till nodens interna IP i `/etc/default/svxlink-webpanel`. Begränsa sedan brandväggen så att endast proxyservern når TCP-port 8090. Undvik att exponera porten direkt mot internet.
+Låt NGINX hantera HTTPS-certifikatet. Behåll autentiseringen i panelen också. Eftersom panelen lyssnar på alla IPv4-gränssnitt ska brandväggen begränsa TCP-port 8090 till betrodda klienter eller proxyservrar. Undvik att exponera porten direkt mot internet.
 
 ## Konfiguration
 
@@ -54,9 +54,9 @@ sudoedit /etc/default/svxlink-webpanel
 
 Viktiga variabler:
 
-- `SVXLINK_WEB_HOST=127.0.0.1`
+- `SVXLINK_WEB_HOST=0.0.0.0` (alla IPv4-gränssnitt)
 - `SVXLINK_WEB_PORT=8090`
-- `SVXLINK_WEB_USER=admin`
+- `SVXLINK_WEB_USER=<ditt valda användarnamn>`
 - `SVXLINK_WEB_PASSWORD=...`
 - `SVXLINK_LOGFILE=/var/log/svxlink`
 - `SVXLINK_SERVICE=svxlink`
@@ -73,7 +73,7 @@ sudo journalctl -u svxlink-webpanel.service -n 80 --no-pager
 
 ## Säkerhetsnoteringar
 
-- Standardinställningen binder endast till localhost.
+- Standardinställningen binder till alla IPv4-gränssnitt. Begränsa därför åtkomsten till TCP-port 8090 med brandvägg.
 - HTTPS bör termineras i NGINX eller annan betrodd reverse proxy.
 - Om panelen körs på en separat värd eller är åtkomlig från andra nät måste åtkomst till port 8090 begränsas med brandvägg.
 - Använd ett unikt lösenord och behåll panelens egen autentisering även bakom NGINX.

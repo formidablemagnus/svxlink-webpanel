@@ -16,7 +16,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-HOST = os.environ.get("SVXLINK_WEB_HOST", "127.0.0.1")
+HOST = os.environ.get("SVXLINK_WEB_HOST", "0.0.0.0")
 PORT = int(os.environ.get("SVXLINK_WEB_PORT", "8090"))
 LOGFILE = os.environ.get("SVXLINK_LOGFILE", "/var/log/svxlink")
 SERVICE = os.environ.get("SVXLINK_SERVICE", "svxlink")
