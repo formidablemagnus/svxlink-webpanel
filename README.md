@@ -13,10 +13,11 @@ Panelen använder endast Python-standardbiblioteket.
 
 ## Installation
 
-Packa upp arkivet och kör:
 
 ```bash
-cd svxlink-webpanel-installer
+git clone -b main https://github.com/formidablemagnus/svxlink-webpanel.git 
+cd svxlink-webpanel
+sudo chmod +x install.sh
 sudo ./install.sh
 ```
 
