@@ -1,6 +1,6 @@
-# SvxLink Webpanel v1.4.1 – installationspaket
+# SvxLink Webpanel v1.5 – installationspaket
 
-Installationspaketet innehåller `svxlink-webpanel.py` (v1.4.1), systemd-installation, konfiguration och avinstallation.
+Installationspaketet innehåller `svxlink-webpanel.py` (v1.5), systemd-installation, konfiguration och avinstallation.
 Panelen använder endast Python-standardbiblioteket.
 
 ## Krav
@@ -65,6 +65,7 @@ Viktiga variabler:
 - `SVXLINK_WEB_USER=<ditt valda användarnamn>`
 - `SVXLINK_WEB_PASSWORD=...`
 - `SVXLINK_LOGFILE=/var/log/svxlink`
+- `SVXLINK_CONFIG=/etc/svxlink/svxlink.conf`
 - `SVXLINK_SERVICE=svxlink`
 - `SVXLINK_DTMF_PTY=/dev/shm/dtmf_ctrl`
 - `SVXLINK_BUTTONS_FILE=/var/lib/svxlink/webpanel-buttons.json`
@@ -78,6 +79,8 @@ sudo journalctl -u svxlink-webpanel.service -n 80 --no-pager
 ```
 
 På statusraden i panelen finns knappar för att starta och stoppa SvxLink. Stopp kräver bekräftelse. Installationen lägger sudoers-regeln i `/etc/sudoers.d/svxlink-webpanel` och tillåter endast `systemctl start svxlink` och `systemctl stop svxlink` för panelkontot. Systemd-inställningen `NoNewPrivileges` är avstängd och `RestrictSUIDSGID` används inte, så panelen kan köra den begränsade sudo-regeln och crontab-programmets behörighetsbyte. Om du ändrar `SVXLINK_SERVICE` från standardvärdet `svxlink` måste du även anpassa sudoers-regeln.
+
+Översikten visar permanent monitorerade talgrupper från `MONITOR_TGS` i sektionen `[ReflectorLogic]` i SvxLink-konfigurationen. Standardfilen är `/etc/svxlink/svxlink.conf`; ändra `SVXLINK_CONFIG` om konfigurationen ligger på en annan plats. Paneltjänstens användare behöver läsrättighet till filen.
 
 Snabbknapparnas ordning ändras i **Administrera snabbval** genom att dra i handtaget bredvid en knapp. Tangentbordsanvändare kan fokusera handtaget och flytta knappen med upp- och nedpilarna. Klicka på **Spara knappar** för att spara den nya ordningen.
 

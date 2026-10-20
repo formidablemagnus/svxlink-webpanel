@@ -20,8 +20,9 @@ from urllib.parse import urlparse
 
 HOST = os.environ.get("SVXLINK_WEB_HOST", "0.0.0.0")
 PORT = int(os.environ.get("SVXLINK_WEB_PORT", "8090"))
-VERSION = "1.4.1"
+VERSION = "1.5"
 LOGFILE = os.environ.get("SVXLINK_LOGFILE", "/var/log/svxlink")
+CONFIG_FILE = os.environ.get("SVXLINK_CONFIG", "/etc/svxlink/svxlink.conf")
 SERVICE = os.environ.get("SVXLINK_SERVICE", "svxlink")
 USERNAME = os.environ.get("SVXLINK_WEB_USER", "admin")
 PASSWORD = os.environ.get("SVXLINK_WEB_PASSWORD", "")
@@ -351,22 +352,55 @@ def status_data():
         lines, r"(Talker start|Talker stop) on TG #(24075|2407|2406|2405|2404|2403|2402|2401|2400|240|9)(?:[0-9]{3})?:\s*([^\s\x00]+)?",
         lambda m: f"TG {m.group(2)} · {m.group(1)}" + (f" · {m.group(3).strip().split()[0]}" if m.group(3).strip() else "")
     )
-    node, nodetime = latest_match(
-        lines, r"Node (joined|left):\s*(\S+)",
-        lambda m: f"{m.group(2)} · {m.group(1)}"
-    )
     current_tg, _ = latest_match(
         lines, r"Selecting TG #([0-9]+)",
         lambda m: m.group(1)
     )
+    monitor_tgs, monitor_tgs_error = read_monitor_tgs()
     service, active = service_status()
     errors = sum(1 for line in lines if re.search(r"ERROR|FATAL|CRITICAL", line, re.I))
     warnings = sum(1 for line in lines if re.search(r"WARNING|UDP frame\\(s\\) lost", line, re.I))
     events = sum(1 for line in lines if re.search(r"ReflectorLogic|Talker start|Talker stop|Node joined|Node left|Selecting TG", line, re.I))
     return {"service_status": service, "active": active, "lines": lines,
-            "tg_event": tg, "tg_time": tgtime, "node_event": node, "node_time": nodetime,
-            "current_tg": current_tg,
+            "tg_event": tg, "tg_time": tgtime, "current_tg": current_tg,
+            "monitor_tgs": monitor_tgs,
+            "monitor_tgs_error": monitor_tgs_error,
             "errors": errors, "warnings": warnings, "events": events}
+
+def read_monitor_tgs():
+    section_found = False
+    monitor_value = None
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as config_file:
+            for line in config_file:
+                line = line.strip()
+                if not line or line.startswith(("#", ";")):
+                    continue
+                if line.startswith("[") and "]" in line:
+                    section_found = line[1:line.index("]")].strip() == "ReflectorLogic"
+                    continue
+                if not section_found or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                if key.strip() == "MONITOR_TGS":
+                    monitor_value = value.split("#", 1)[0].split(";", 1)[0].strip()
+    except (OSError, UnicodeError) as exc:
+        return [], f"Kunde inte läsa {CONFIG_FILE}: {exc}"
+
+    if monitor_value is None:
+        return [], "MONITOR_TGS saknas i [ReflectorLogic]."
+    if not monitor_value:
+        return [], None
+
+    talkgroups = []
+    for item in monitor_value.split(","):
+        item = item.strip()
+        if not item.isdigit() or int(item) <= 0:
+            return [], "MONITOR_TGS innehåller ett ogiltigt talgruppsvärde."
+        normalized_item = str(int(item))
+        if normalized_item not in talkgroups:
+            talkgroups.append(normalized_item)
+    return talkgroups, None
 
 def reflector_status_data():
     """Fetch and summarize public reflector_proxy JSON without blocking long."""

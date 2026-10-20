@@ -11,6 +11,8 @@ async function update(){try{const r=await fetch('/api/status',{cache:'no-store'}
  $('service-start').disabled=d.active||serviceActionPending;$('service-stop').disabled=!d.active||serviceActionPending;
  $('tg').textContent=d.tg_event||'Ingen identifierad händelse';$('tgtime').textContent=d.tg_time||'';
  currentTG=d.current_tg||'';$('currenttg').textContent=currentTG ? ('TG '+currentTG) : 'Okänd';
+ $('monitor-tgs').textContent=d.monitor_tgs_error?'Kunde inte läsa konfigurationen':(d.monitor_tgs&&d.monitor_tgs.length?d.monitor_tgs.map(tg=>'TG '+tg).join(' · '):'Inga permanent monitorerade talgrupper');
+ $('monitor-tgs-error').textContent=d.monitor_tgs_error||'Läses från [ReflectorLogic] MONITOR_TGS i svxlink.conf';
  document.querySelectorAll('[data-live-tg]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.liveTg)===String(currentTG)));
  $('node').textContent=d.node_event||'Ingen identifierad händelse';$('nodetime').textContent=d.node_time||'';
  $('counts').textContent=d.errors+' · '+d.warnings+' · '+d.events;

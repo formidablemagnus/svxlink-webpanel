@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5] - 2026-10-20
+
+### Added
+- Visar permanent monitorerade talgrupper från `MONITOR_TGS` i `[ReflectorLogic]`.
+
 ## [1.4.1] - 2026-10-20
 
 ### Fixed
