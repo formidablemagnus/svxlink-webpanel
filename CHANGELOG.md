@@ -1,16 +1,12 @@
 # Changelog
 
-## [Unreleased]
-
-### Added
-- Redigering av `/etc/svxlink/svxlink.conf` i en separat portalundersida med automatisk säkerhetskopia.
-- Separat, bekräftad knapp för att starta om SvxLink efter konfigurationsändringar.
-- Visar anropssignalen från den aktiva simplex- eller repeaterlogiken i portalens rubrik.
-
-## [1.5] - 2026-10-20
+## [1.5.0] - 2026-10-20
 
 ### Added
 - Visar permanent monitorerade talgrupper från `MONITOR_TGS` i `[ReflectorLogic]`.
+- Redigering av `/etc/svxlink/svxlink.conf` i en separat portalundersida med automatisk säkerhetskopia.
+- Separat, bekräftad knapp för att starta om SvxLink efter konfigurationsändringar.
+- Visar anropssignalen från den aktiva simplex- eller repeaterlogiken i portalens rubrik.
 
 ## [1.4.1] - 2026-10-20
 
