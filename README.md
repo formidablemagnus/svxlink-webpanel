@@ -1,6 +1,6 @@
-# SvxLink Webpanel v1.3 – installationspaket
+# SvxLink Webpanel v1.4 – installationspaket
 
-Installationspaketet innehåller `svxlink-webpanel.py` (v1.3), systemd-installation, konfiguration och avinstallation.
+Installationspaketet innehåller `svxlink-webpanel.py` (v1.4), systemd-installation, konfiguration och avinstallation.
 Panelen använder endast Python-standardbiblioteket.
 
 ## Krav
@@ -23,6 +23,7 @@ sudo ./install.sh
 Installationsscriptet:
 
 - installerar programmet i `/usr/local/bin/svxlink-webpanel.py`
+- installerar webbgränssnittets HTML, CSS och JavaScript i `/usr/local/share/svxlink-webpanel`
 - skapar systemd-tjänsten `svxlink-webpanel.service`
 - frågar efter användarnamn och lösenord om ingen konfiguration finns
 - binder tjänsten till alla IPv4-adresser på port 8090
@@ -44,6 +45,10 @@ Tjänsten lyssnar på alla IPv4-adresser på port `8090`. Lägg till en proxy ho
 - Websockets: normalt inte nödvändigt
 
 Låt NGINX hantera HTTPS-certifikatet. Behåll autentiseringen i panelen också. Eftersom panelen lyssnar på alla IPv4-gränssnitt ska brandväggen begränsa TCP-port 8090 till betrodda klienter eller proxyservrar. Undvik att exponera porten direkt mot internet.
+
+## Webbgränssnittets filer
+
+Webbgränssnittet är uppdelat i `web/index.html`, `web/schedules.html`, `web/style.css` och JavaScript-filerna `web/common.js`, `web/app.js` och `web/schedules.js`. Översikten visas på `/` och schemaläggningen på `/schedules`. Installationen kopierar dessa filer till `/usr/local/share/svxlink-webpanel`; Python-servern hanterar API:et och serverar bara de uttryckligen tillåtna gränssnittsfilerna.
 
 ## Konfiguration
 
@@ -72,9 +77,13 @@ sudo systemctl status svxlink-webpanel.service
 sudo journalctl -u svxlink-webpanel.service -n 80 --no-pager
 ```
 
-På statusraden i panelen finns knappar för att starta och stoppa SvxLink. Stopp kräver bekräftelse. Installationen lägger sudoers-regeln i `/etc/sudoers.d/svxlink-webpanel` och tillåter endast `systemctl start svxlink` och `systemctl stop svxlink` för panelkontot. Systemd-inställningen `NoNewPrivileges` är avstängd för paneltjänsten eftersom sudo annars inte kan använda sin begränsade behörighet. Om du ändrar `SVXLINK_SERVICE` från standardvärdet `svxlink` måste du även anpassa sudoers-regeln.
+På statusraden i panelen finns knappar för att starta och stoppa SvxLink. Stopp kräver bekräftelse. Installationen lägger sudoers-regeln i `/etc/sudoers.d/svxlink-webpanel` och tillåter endast `systemctl start svxlink` och `systemctl stop svxlink` för panelkontot. Systemd-inställningen `NoNewPrivileges` är avstängd och `RestrictSUIDSGID` används inte, så panelen kan köra den begränsade sudo-regeln och crontab-programmets behörighetsbyte. Om du ändrar `SVXLINK_SERVICE` från standardvärdet `svxlink` måste du även anpassa sudoers-regeln.
 
 Snabbknapparnas ordning ändras i **Administrera snabbval** genom att dra i handtaget bredvid en knapp. Tangentbordsanvändare kan fokusera handtaget och flytta knappen med upp- och nedpilarna. Klicka på **Spara knappar** för att spara den nya ordningen.
+
+Under **Schemalagda DTMF-kommandon** kan du läsa och uppdatera `svxlink`-användarens crontab. Ange DTMF-koden och de fem vanliga cron-fälten; raden visas i förhandsvisningen innan den läggs till. Exempelvis motsvarar `45 19 * * 4` torsdagar kl. 19:45. Fälten stöder `*`, värden, intervall, kommaseparerade listor och steg, till exempel `*/10`. Panelen hanterar endast sitt eget markerade block och lämnar övriga crontab-rader orörda. De övriga raderna visas skrivskyddat. Kommandot använder `printf` för att skriva DTMF-koden till den konfigurerade `SVXLINK_DTMF_PTY`.
+
+Installationen kräver `crontab` och ger systemd-tjänsten skrivåtkomst till vanliga cron-spoolkataloger (`/var/spool/cron` och `/var/spool/cron/crontabs`) för att crontab-programmet ska kunna spara användarens schema. Cron-tjänsten måste också vara installerad och aktiv för att köra schemaläggningarna.
 
 ## Säkerhetsnoteringar
 
@@ -101,4 +110,4 @@ Om tjänsten inte kan läsa loggen eller skriva DTMF, justera rättigheter enlig
 sudo ./uninstall.sh
 ```
 
-Avinstallationen tar bort tjänsten, programfilen och panelens sudoers-regel men behåller konfiguration och snabbknappar. Ta bort `/etc/default/svxlink-webpanel` och `/var/lib/svxlink/webpanel-buttons.json` manuellt endast om du vill radera dessa också.
+Avinstallationen tar bort tjänsten, program- och webbgränssnittsfilerna samt panelens sudoers-regel men behåller konfiguration och snabbknappar. Ta bort `/etc/default/svxlink-webpanel` och `/var/lib/svxlink/webpanel-buttons.json` manuellt endast om du vill radera dessa också.

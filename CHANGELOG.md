@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4] - 2026-10-20
+
+### Added
+- Schemaläggning av DTMF-kommandon via svxlink-användarens crontab.
+
+### Changed
+- Webbgränssnittet är uppdelat i separata filer och schemaläggningen har en egen undersida.
+
 ## [1.3] - 2026-10-20
 
 ### Added

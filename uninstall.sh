@@ -6,6 +6,7 @@ rm -f /etc/systemd/system/svxlink-webpanel.service
 rm -f /etc/sudoers.d/svxlink-webpanel
 systemctl daemon-reload
 rm -f /usr/local/bin/svxlink-webpanel.py
+rm -rf /usr/local/share/svxlink-webpanel
 # Configuration and custom buttons are intentionally preserved.
 echo "Webpanelen och systemd-tjänsten har tagits bort. Konfigurationen och knapparna finns kvar i:"
 echo "  /etc/default/svxlink-webpanel"

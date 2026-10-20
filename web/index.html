@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/assets/style.css">
+<title>SvxLink Control v__VERSION__</title>
+</head><body><main>
+<header><div><h1>SvxLink Control <span class="muted">v__VERSION__</span></h1><div class="muted">Status, händelser och loggar</div></div><div class="header-meta muted">Uppdateras automatiskt<br>Var 5:e sekund</div></header>
+<nav class="page-nav" aria-label="Huvudmeny"><a href="/" aria-current="page">Översikt</a><a href="/schedules">Schemaläggning</a></nav>
+<section class="status-banner" aria-label="Tjänstestatus"><div><div class="status-caption">SvxLink-tjänst</div><div class="status-value" id="service"><span class="dot" aria-hidden="true"></span>Hämtar…</div><div class="service-controls"><button id="service-start" type="button" disabled>Starta</button><button id="service-stop" class="danger-button" type="button" disabled>Stoppa</button></div><div class="muted service-result" id="service-result" role="status" aria-live="polite"></div></div><div class="status-right"><div class="status-caption">Senast uppdaterad</div><div class="status-value" id="status-updated">Väntar…</div></div></section>
+<div class="grid">
+<section class="card summary-card featured"><div class="k">Aktuell vald talgrupp</div><div class="v" id="currenttg">Okänd</div><div class="muted">Baserad på senaste ”Selecting TG” i loggen</div></section>
+<section class="card summary-card"><div class="k">Senaste talgruppshändelse</div><div class="v" id="tg">—</div><div class="muted" id="tgtime"></div></section>
+<section class="card summary-card"><div class="k">Senaste reflektorhändelse</div><div class="v" id="node">—</div><div class="muted" id="nodetime"></div></section>
+<section class="card summary-card"><div class="k">Loggöversikt</div><div class="v" id="counts">—</div><div class="muted">Fel · varningar · händelser</div></section>
+</div>
+<section class="card"><div class="section-heading"><div><h2>Talgrupper på reflektorn</h2>
+<div class="muted section-intro">Överblick över vad noderna lyssnar på just nu. TX visar noder som rapporterar pågående sändning.</div></div>
+<div class="badge" id="reflector-nodes">Hämtar…</div></div>
+<div class="tg-buttons" id="dynamic-tg-buttons" aria-label="Aktiva talgrupper"><span class="muted">Hämtar reflektorstatus…</span></div>
+<div class="muted status-message" id="reflector-updated" role="status" aria-live="polite"></div>
+</section>
+<section class="card"><h2>Styrning</h2>
+<div class="muted">Välj ett snabbval för att skicka ett kommando till SvxLink.</div>
+<div class="toolbar" id="tgbuttons" aria-label="Sparade snabbval"></div>
+<div class="toolbar"><button id="managebuttons" type="button">Administrera snabbval</button></div>
+<div id="buttonadmin" class="admin-panel" style="display:none">
+<h2>Administrera DTMF-knappar</h2>
+<div class="muted">Lägg till, ändra, ta bort eller dra i handtaget för att ändra ordning på snabbknappar. Använd upp-/nedpilarna när handtaget har fokus. Kommandon skickas direkt när du trycker på knappen.</div>
+<div id="buttonrows"></div>
+<div class="toolbar"><button id="addbutton" type="button">Lägg till knapp</button><button id="savebuttons" type="button">Spara knappar</button><button id="cancelbuttons" type="button">Stäng</button></div>
+<div class="muted status-message" id="adminresult" role="status" aria-live="polite"></div>
+</div>
+<div class="toolbar">
+<input id="customdtmf" maxlength="20" placeholder="Eget DTMF-kommando (0–9, * och #)" aria-label="Eget DTMF-kommando">
+<button id="senddtmf" type="button">Skicka DTMF</button>
+</div>
+<div class="muted">Endast siffrorna 0–9 samt * och # tillåts, högst 20 tecken.</div>
+<div class="muted status-message" id="commandresult" role="status" aria-live="polite"></div>
+<div class="danger-area"><div class="muted">Frånkoppling lämnar den aktuella reflektorn.</div><div class="toolbar"><button id="disconnect" class="danger-button" type="button">Koppla från reflektorn</button></div></div></section>
+<section class="card"><div class="section-heading"><div><h2>Loggar</h2><div class="muted">Senaste händelser från SvxLink-tjänsten</div></div><div class="badge log-count" id="log-count" aria-live="polite">0 träffar</div></div><div class="log-toolbar">
+<input id="filter" placeholder="Sök i loggar (t.ex. UDP, ERROR, SA7MHN)" aria-label="Sök i loggar">
+<select id="kind" aria-label="Filtrera loggnivå"><option value="all">Alla nivåer</option><option value="error">Fel</option><option value="warn">Varningar</option><option value="event">Reflektor / talgrupp</option></select>
+<button id="refresh" type="button">Uppdatera nu</button></div><div class="log" id="logs" role="log" aria-live="polite">Hämtar loggar…</div>
+<footer id="updated">Väntar på första uppdateringen.</footer></section>
+<footer>Denna panel skickar kommandon till SvxLink men styr inte radion direkt. Loggstatus kan släpa efter faktisk aktivitet.</footer>
+</main><script src="/assets/common.js" defer></script><script src="/assets/app.js" defer></script></body></html>

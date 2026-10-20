@@ -10,6 +10,8 @@ fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 APP_SRC="$SCRIPT_DIR/svxlink-webpanel.py"
 APP_DST="/usr/local/bin/svxlink-webpanel.py"
+WEB_SRC="$SCRIPT_DIR/web"
+WEB_DST="/usr/local/share/svxlink-webpanel"
 ENV_FILE="/etc/default/svxlink-webpanel"
 SERVICE_FILE="/etc/systemd/system/svxlink-webpanel.service"
 BUTTONS_FILE="/var/lib/svxlink/webpanel-buttons.json"
@@ -19,6 +21,12 @@ if [[ ! -f "$APP_SRC" ]]; then
   echo "Hittar inte $APP_SRC. Packa upp hela paketet och kör install.sh därifrån." >&2
   exit 1
 fi
+for web_file in index.html schedules.html style.css common.js app.js schedules.js; do
+  if [[ ! -f "$WEB_SRC/$web_file" ]]; then
+    echo "Hittar inte $WEB_SRC/$web_file. Packa upp hela paketet och kör install.sh därifrån." >&2
+    exit 1
+  fi
+done
 
 if ! id svxlink >/dev/null 2>&1; then
   echo "Användaren 'svxlink' finns inte. Installera SvxLink först eller anpassa paketet för din distribution." >&2
@@ -33,6 +41,10 @@ if ! command -v visudo >/dev/null 2>&1; then
   echo "visudo saknas. Installera sudo innan du installerar panelen." >&2
   exit 1
 fi
+if ! command -v crontab >/dev/null 2>&1; then
+  echo "crontab saknas. Installera cron innan du installerar panelen." >&2
+  exit 1
+fi
 
 if [[ -e "$APP_DST" ]]; then
   cp -a "$APP_DST" "${APP_DST}.bak.$(date +%Y%m%d-%H%M%S)"
@@ -41,6 +53,10 @@ fi
 
 install -o root -g root -m 0755 "$APP_SRC" "$APP_DST"
 python3 -m py_compile "$APP_DST"
+install -d -o root -g root -m 0755 "$WEB_DST"
+for web_file in index.html schedules.html style.css common.js app.js schedules.js; do
+  install -o root -g root -m 0644 "$WEB_SRC/$web_file" "$WEB_DST/$web_file"
+done
 
 install -d -o svxlink -g svxlink -m 0750 /var/lib/svxlink
 if [[ ! -e "$BUTTONS_FILE" ]]; then
@@ -127,6 +143,7 @@ User=svxlink
 Group=svxlink
 EnvironmentFile=/etc/default/svxlink-webpanel
 ExecStart=/usr/bin/python3 /usr/local/bin/svxlink-webpanel.py
+Environment=SVXLINK_WEB_ROOT=/usr/local/share/svxlink-webpanel
 Restart=on-failure
 RestartSec=3
 UMask=0027
@@ -135,11 +152,11 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/lib/svxlink /dev/shm
+ReadWritePaths=-/var/spool/cron -/var/spool/cron/crontabs
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
 LockPersonality=true
-RestrictSUIDSGID=true
 RestrictRealtime=true
 SystemCallArchitectures=native
 
