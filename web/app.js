@@ -12,7 +12,7 @@ async function update(){try{const r=await fetch('/api/status',{cache:'no-store'}
  $('tg').textContent=d.tg_event||'Ingen identifierad händelse';$('tgtime').textContent=d.tg_time||'';
  currentTG=d.current_tg||'';$('currenttg').textContent=currentTG ? ('TG '+currentTG) : 'Okänd';
  $('monitor-tgs').textContent=d.monitor_tgs_error?'Kunde inte läsa konfigurationen':(d.monitor_tgs&&d.monitor_tgs.length?d.monitor_tgs.map(tg=>'TG '+tg).join(' · '):'Inga permanent monitorerade talgrupper');
- $('monitor-tgs-error').textContent=d.monitor_tgs_error||'Läses från [ReflectorLogic] MONITOR_TGS i svxlink.conf';
+ $('monitor-tgs-error').textContent=d.monitor_tgs_error||'Läses från svxlink.conf';
  document.querySelectorAll('[data-live-tg]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.liveTg)===String(currentTG)));
  $('counts').textContent=d.errors+' · '+d.warnings+' · '+d.events;
  allLines=d.lines||[];renderLogs();const now=new Date().toLocaleTimeString('sv-SE');$('status-updated').textContent=now;$('updated').textContent='Uppdaterad '+now+' · visar '+allLines.length+' senaste loggrader';

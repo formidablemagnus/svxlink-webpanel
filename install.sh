@@ -10,6 +10,8 @@ fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 APP_SRC="$SCRIPT_DIR/svxlink-webpanel.py"
 APP_DST="/usr/local/bin/svxlink-webpanel.py"
+CONFIG_HELPER_SRC="$SCRIPT_DIR/svxlink-webpanel-config.py"
+CONFIG_HELPER_DST="/usr/local/libexec/svxlink-webpanel-config"
 WEB_SRC="$SCRIPT_DIR/web"
 WEB_DST="/usr/local/share/svxlink-webpanel"
 ENV_FILE="/etc/default/svxlink-webpanel"
@@ -17,11 +19,11 @@ SERVICE_FILE="/etc/systemd/system/svxlink-webpanel.service"
 BUTTONS_FILE="/var/lib/svxlink/webpanel-buttons.json"
 SUDOERS_FILE="/etc/sudoers.d/svxlink-webpanel"
 
-if [[ ! -f "$APP_SRC" ]]; then
-  echo "Hittar inte $APP_SRC. Packa upp hela paketet och kör install.sh därifrån." >&2
+if [[ ! -f "$APP_SRC" || ! -f "$CONFIG_HELPER_SRC" ]]; then
+  echo "Hittar inte panelprogrammet eller konfigurationshjälpen. Packa upp hela paketet och kör install.sh därifrån." >&2
   exit 1
 fi
-for web_file in index.html schedules.html style.css common.js app.js schedules.js; do
+for web_file in index.html schedules.html config.html style.css common.js app.js schedules.js config.js; do
   if [[ ! -f "$WEB_SRC/$web_file" ]]; then
     echo "Hittar inte $WEB_SRC/$web_file. Packa upp hela paketet och kör install.sh därifrån." >&2
     exit 1
@@ -58,8 +60,10 @@ fi
 
 install -o root -g root -m 0755 "$APP_SRC" "$APP_DST"
 python3 -m py_compile "$APP_DST"
+install -d -o root -g root -m 0755 "$(dirname "$CONFIG_HELPER_DST")"
+install -o root -g root -m 0755 "$CONFIG_HELPER_SRC" "$CONFIG_HELPER_DST"
 install -d -o root -g root -m 0755 "$WEB_DST"
-for web_file in index.html schedules.html style.css common.js app.js schedules.js; do
+for web_file in index.html schedules.html config.html style.css common.js app.js schedules.js config.js; do
   install -o root -g root -m 0644 "$WEB_SRC/$web_file" "$WEB_DST/$web_file"
 done
 
@@ -158,6 +162,7 @@ ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/lib/svxlink /dev/shm
 ReadWritePaths=-/var/spool/cron -/var/spool/cron/crontabs
+ReadWritePaths=/etc/svxlink
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
@@ -170,9 +175,9 @@ WantedBy=multi-user.target
 EOF_SERVICE
 chmod 0644 "$SERVICE_FILE"
 
-# Permit only the two service actions required by the panel.
+# Permit only the required service actions and fixed-path configuration helper.
 SUDOERS_TMP="$(mktemp /etc/sudoers.d/svxlink-webpanel.XXXXXX)"
-printf '%s\n' 'svxlink ALL=(root) NOPASSWD: /usr/bin/systemctl start svxlink, /usr/bin/systemctl stop svxlink' > "$SUDOERS_TMP"
+printf '%s\n' 'svxlink ALL=(root) NOPASSWD: /usr/bin/systemctl start svxlink, /usr/bin/systemctl stop svxlink, /usr/bin/systemctl restart svxlink, /usr/local/libexec/svxlink-webpanel-config' > "$SUDOERS_TMP"
 chmod 0440 "$SUDOERS_TMP"
 if ! visudo -cf "$SUDOERS_TMP"; then
   rm -f "$SUDOERS_TMP"

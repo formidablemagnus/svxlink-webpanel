@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SvxLink Control__CALLSIGN_SUFFIX__ v__VERSION__ – Konfiguration</title><link rel="stylesheet" href="/assets/style.css"></head><body><main>
+<header><div><h1>SvxLink Control__CALLSIGN_SUFFIX__ <span class="muted">v__VERSION__</span></h1><div class="muted">Redigera SvxLink-konfiguration</div></div><div class="header-meta muted">SvxLink Webpanel</div></header>
+<nav class="page-nav" aria-label="Huvudmeny"><a href="/">Översikt</a><a href="/schedules">Schemaläggning</a><a href="/config" aria-current="page">Konfiguration</a></nav>
+<section class="card">
+<div class="section-heading"><div><h2>svxlink.conf</h2><div class="muted">/etc/svxlink/svxlink.conf</div></div><button id="reload-config" type="button">Läs om filen</button></div>
+<p class="muted config-warning">Ändringar påverkar SvxLink först efter omstart. En säkerhetskopia skapas automatiskt varje gång du sparar.</p>
+<label class="cron-field config-editor-label" for="config-content">Konfigurationsfilens innehåll<textarea id="config-content" class="config-editor" spellcheck="false" autocomplete="off" autocapitalize="off" disabled aria-describedby="config-message"></textarea></label>
+<div class="toolbar config-actions"><button id="save-config" type="button" disabled>Spara konfiguration</button><button id="restart-svxlink" type="button" class="danger-button">Starta om SvxLink</button></div>
+<div class="muted status-message" id="config-message" role="status" aria-live="polite">Läser konfigurationen…</div>
+</section>
+<footer><a href="/">Tillbaka till översikten</a></footer>
+</main><script src="/assets/common.js" defer></script><script src="/assets/config.js" defer></script></body></html>

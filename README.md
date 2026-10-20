@@ -24,6 +24,7 @@ Installationsscriptet:
 
 - installerar programmet i `/usr/local/bin/svxlink-webpanel.py`
 - installerar webbgränssnittets HTML, CSS och JavaScript i `/usr/local/share/svxlink-webpanel`
+- installerar ett begränsat hjälpprogram för redigering av SvxLinks konfiguration
 - skapar systemd-tjänsten `svxlink-webpanel.service`
 - frågar efter användarnamn och lösenord om ingen konfiguration finns
 - binder tjänsten till alla IPv4-adresser på port 8090
@@ -78,9 +79,13 @@ sudo systemctl status svxlink-webpanel.service
 sudo journalctl -u svxlink-webpanel.service -n 80 --no-pager
 ```
 
-På statusraden i panelen finns knappar för att starta och stoppa SvxLink. Stopp kräver bekräftelse. Installationen lägger sudoers-regeln i `/etc/sudoers.d/svxlink-webpanel` och tillåter endast `systemctl start svxlink` och `systemctl stop svxlink` för panelkontot. Systemd-inställningen `NoNewPrivileges` är avstängd och `RestrictSUIDSGID` används inte, så panelen kan köra den begränsade sudo-regeln och crontab-programmets behörighetsbyte. Om du ändrar `SVXLINK_SERVICE` från standardvärdet `svxlink` måste du även anpassa sudoers-regeln.
+På statusraden i panelen finns knappar för att starta och stoppa SvxLink. Stopp kräver bekräftelse. Installationen lägger sudoers-regeln i `/etc/sudoers.d/svxlink-webpanel` och tillåter endast `systemctl start svxlink`, `systemctl stop svxlink`, `systemctl restart svxlink` samt det fasta konfigurationshjälpprogrammet för panelkontot. Systemd-inställningen `NoNewPrivileges` är avstängd och `RestrictSUIDSGID` används inte, så panelen kan köra den begränsade sudo-regeln och crontab-programmets behörighetsbyte. Om du ändrar `SVXLINK_SERVICE` från standardvärdet `svxlink` måste du även anpassa sudoers-regeln.
 
-Översikten visar permanent monitorerade talgrupper från `MONITOR_TGS` i sektionen `[ReflectorLogic]` i SvxLink-konfigurationen. Standardfilen är `/etc/svxlink/svxlink.conf`; ändra `SVXLINK_CONFIG` om konfigurationen ligger på en annan plats. Paneltjänstens användare behöver läsrättighet till filen.
+Översikten visar permanent monitorerade talgrupper från `MONITOR_TGS` i sektionen `[ReflectorLogic]` i SvxLink-konfigurationen. Standardfilen är `/etc/svxlink/svxlink.conf`; ändra `SVXLINK_CONFIG` om översikten ska läsa talgrupperna från en annan plats. Paneltjänstens användare behöver läsrättighet till den filen.
+
+Portalens rubrik hämtar anropssignalen (`CALLSIGN`) från det första aktiva simplex- eller repeateravsnittet som anges i `[GLOBAL] LOGICS`, till exempel `[SimplexLogic]`.
+
+På sidan **Konfiguration** kan du redigera `/etc/svxlink/svxlink.conf`. Varje sparning skapar en säkerhetskopia bredvid filen med tidsstämpel. Sparning skriver atomiskt och bevarar filens ägare och rättigheter. Om filen har ändrats sedan den lästes in avbryts sparningen, så att externa ändringar inte skrivs över av misstag. Efter sparning väljer du själv när du startar om SvxLink med sidans separata omstartsknapp; en omstart bryter pågående trafik och anslutningar. Panelen använder ett root-ägt hjälpprogram med fast konfigurationssökväg, och systemd-enheten får skrivåtkomst till `/etc/svxlink` för den begränsade operationen. Hjälpprogrammet kan endast läsa och ersätta `/etc/svxlink/svxlink.conf`, inte godtyckliga filer.
 
 Snabbknapparnas ordning ändras i **Administrera snabbval** genom att dra i handtaget bredvid en knapp. Tangentbordsanvändare kan fokusera handtaget och flytta knappen med upp- och nedpilarna. Klicka på **Spara knappar** för att spara den nya ordningen.
 

@@ -34,6 +34,8 @@ CRONTAB_COMMAND = "crontab"
 CRONTAB_START = "# BEGIN SVXLINK-WEBPANEL MANAGED SCHEDULES"
 CRONTAB_END = "# END SVXLINK-WEBPANEL MANAGED SCHEDULES"
 CRONTAB_LOCK = threading.Lock()
+CONFIG_HELPER = "/usr/local/libexec/svxlink-webpanel-config"
+MAX_CONFIG_BYTES = 2 * 1024 * 1024
 
 WEB_ROOT = os.environ.get("SVXLINK_WEB_ROOT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "web"))
 WEB_ASSETS = {
@@ -41,6 +43,7 @@ WEB_ASSETS = {
     "/assets/common.js": ("common.js", "application/javascript; charset=utf-8"),
     "/assets/app.js": ("app.js", "application/javascript; charset=utf-8"),
     "/assets/schedules.js": ("schedules.js", "application/javascript; charset=utf-8"),
+    "/assets/config.js": ("config.js", "application/javascript; charset=utf-8"),
 }
 
 
@@ -61,7 +64,7 @@ def service_status():
         return "okänt", False
 
 def control_service(action):
-    if action not in ("start", "stop"):
+    if action not in ("start", "stop", "restart"):
         return {"ok": False, "error": "Otillåten tjänståtgärd."}, 400
     try:
         result = subprocess.run(
@@ -75,9 +78,32 @@ def control_service(action):
     if result.returncode != 0:
         details = (result.stderr or result.stdout or "").strip()
         if "a password is required" in details.lower() or "not allowed" in details.lower():
-            return {"ok": False, "error": "Panelen saknar behörighet att starta eller stoppa SvxLink. Kontrollera sudoers-konfigurationen."}, 500
-        return {"ok": False, "error": f"Kunde inte {('starta' if action == 'start' else 'stoppa')} SvxLink: {details or 'systemctl misslyckades.'}"}, 500
-    return {"ok": True, "message": f"SvxLink {('startas' if action == 'start' else 'stoppas')}."}, 200
+            return {"ok": False, "error": "Panelen saknar behörighet att starta, stoppa eller starta om SvxLink. Kontrollera sudoers-konfigurationen."}, 500
+        action_text = {"start": "starta", "stop": "stoppa", "restart": "starta om"}[action]
+        return {"ok": False, "error": f"Kunde inte {action_text} SvxLink: {details or 'systemctl misslyckades.'}"}, 500
+    action_text = {"start": "startas", "stop": "stoppas", "restart": "startas om"}[action]
+    return {"ok": True, "message": f"SvxLink {action_text}."}, 200
+
+def config_helper_request(payload):
+    try:
+        result = subprocess.run(
+            ["sudo", "-n", CONFIG_HELPER],
+            input=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            capture_output=True, timeout=20, check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Tidsgränsen överskreds vid åtkomst till konfigurationsfilen.") from exc
+    except OSError as exc:
+        raise RuntimeError(f"Kunde inte köra konfigurationshjälpen: {exc}") from exc
+    try:
+        response = json.loads(result.stdout.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"Konfigurationshjälpen returnerade ett ogiltigt svar: {detail or 'okänt fel'}") from exc
+    if result.returncode != 0 or not isinstance(response, dict) or not response.get("ok"):
+        detail = response.get("error", "Konfigurationshjälpen misslyckades.") if isinstance(response, dict) else "Konfigurationshjälpen misslyckades."
+        raise RuntimeError(detail)
+    return response
 
 def read_log():
     try:
@@ -367,6 +393,39 @@ def status_data():
             "monitor_tgs_error": monitor_tgs_error,
             "errors": errors, "warnings": warnings, "events": events}
 
+def read_config_sections():
+    sections = {}
+    current_section = None
+    with open(CONFIG_FILE, "r", encoding="utf-8") as config_file:
+        for raw_line in config_file:
+            line = raw_line.strip()
+            if not line or line.startswith(("#", ";")):
+                continue
+            if line.startswith("[") and "]" in line:
+                current_section = line[1:line.index("]")].strip()
+                sections.setdefault(current_section, {})
+                continue
+            if current_section is None or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            sections[current_section][key.strip()] = value.split("#", 1)[0].split(";", 1)[0].strip()
+    return sections
+
+def read_config_callsign():
+    try:
+        sections = read_config_sections()
+    except (OSError, UnicodeError):
+        return ""
+
+    logic_names = [name.strip() for name in sections.get("GLOBAL", {}).get("LOGICS", "").split(",") if name.strip()]
+    for logic_name in logic_names:
+        logic = sections.get(logic_name, {})
+        if logic.get("TYPE", "").strip('"\'').lower() in ("simplex", "repeater"):
+            callsign = logic.get("CALLSIGN", "").strip().strip('"\'')
+            if callsign:
+                return callsign
+    return ""
+
 def read_monitor_tgs():
     section_found = False
     monitor_value = None
@@ -469,6 +528,8 @@ class Handler(BaseHTTPRequestHandler):
             filename, content_type = "index.html", "text/html; charset=utf-8"
         elif path in ("/schedules", "/schedules/"):
             filename, content_type = "schedules.html", "text/html; charset=utf-8"
+        elif path in ("/config", "/config/"):
+            filename, content_type = "config.html", "text/html; charset=utf-8"
         elif path in WEB_ASSETS:
             filename, content_type = WEB_ASSETS[path]
         else:
@@ -477,7 +538,14 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 body = read_web_file(filename)
                 if content_type.startswith("text/html"):
-                    body = body.decode("utf-8").replace("__VERSION__", VERSION).encode("utf-8")
+                    callsign = read_config_callsign()
+                    callsign_suffix = html.escape(" - " + callsign) if callsign else ""
+                    body = (
+                        body.decode("utf-8")
+                        .replace("__VERSION__", VERSION)
+                        .replace("__CALLSIGN_SUFFIX__", callsign_suffix)
+                        .encode("utf-8")
+                    )
                 status = 200
             except (OSError, UnicodeDecodeError):
                 body = "Webpanelens fil kunde inte läsas.".encode("utf-8")
@@ -510,6 +578,16 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
+        elif path == "/api/config":
+            try:
+                data = config_helper_request({"action": "read"})
+                status = 200
+            except RuntimeError as exc:
+                data, status = {"ok": False, "error": str(exc)}, 502
+            body = json.dumps(data, ensure_ascii=False).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
         else:
             body = b"Not found"
             self.send_response(404)
@@ -528,7 +606,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return
         post_path = urlparse(self.path).path
-        if post_path not in ("/api/command", "/api/buttons", "/api/service", "/api/schedules"):
+        if post_path not in ("/api/command", "/api/buttons", "/api/service", "/api/schedules", "/api/config"):
             self.send_error(404, "Not found")
             return
         # POST requests are browser actions that can transmit DTMF or control services.
@@ -555,7 +633,7 @@ class Handler(BaseHTTPRequestHandler):
             if not length_header.isdigit():
                 raise ValueError("Ogiltig Content-Length")
             length = int(length_header)
-            max_length = 65536 if post_path == "/api/schedules" else 1024
+            max_length = MAX_CONFIG_BYTES * 6 + 65536 if post_path == "/api/config" else (65536 if post_path == "/api/schedules" else 1024)
             if length < 1 or length > max_length:
                 raise ValueError(f"Begäran måste vara mellan 1 och {max_length} byte")
             raw_body = self.rfile.read(length)
@@ -574,10 +652,23 @@ class Handler(BaseHTTPRequestHandler):
                 result = save_crontab_schedules(payload.get("schedules"))
                 result["message"] = "Schemaläggningarna sparades i svxlink-användarens crontab."
                 status = 200
+            elif post_path == "/api/config":
+                content = payload.get("content")
+                if not isinstance(content, str):
+                    raise ValueError("Konfigurationens innehåll måste vara text.")
+                expected_hash = payload.get("sha256")
+                if not isinstance(expected_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_hash):
+                    raise ValueError("Ogiltig kontrollsumma för den inlästa konfigurationen.")
+                content_size = len(content.encode("utf-8"))
+                if not content_size or content_size > MAX_CONFIG_BYTES or "\x00" in content:
+                    raise ValueError("Konfigurationsfilen måste vara mellan 1 byte och 2 MB och får inte innehålla NUL-tecken.")
+                result = config_helper_request({"action": "write", "content": content, "sha256": expected_hash})
+                result["message"] = "Konfigurationen sparades. En säkerhetskopia skapades."
+                status = 200
             else:
                 action = payload.get("action", "")
                 result, status = send_dtmf(action if isinstance(action, str) else "")
-        except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        except (ValueError, UnicodeError, json.JSONDecodeError) as exc:
             result, status = {"ok": False, "error": str(exc)}, 400
         except RuntimeError as exc:
             result, status = {"ok": False, "error": str(exc)}, 500
