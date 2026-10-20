@@ -102,8 +102,3 @@ sudo ./uninstall.sh
 ```
 
 Avinstallationen tar bort tjänsten, programfilen och panelens sudoers-regel men behåller konfiguration och snabbknappar. Ta bort `/etc/default/svxlink-webpanel` och `/var/lib/svxlink/webpanel-buttons.json` manuellt endast om du vill radera dessa också.
-
-
-### Fix i version 10.1
-
-Dynamiska reflektortalgrupper med upp till 10 siffror accepteras nu. Exempelvis TG 2409938 skickas som DTMF-kommandot `912409938#`. Tidigare accepterades högst sex siffror i den dynamiska talgruppsvägen.
