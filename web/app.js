@@ -14,7 +14,6 @@ async function update(){try{const r=await fetch('/api/status',{cache:'no-store'}
  $('monitor-tgs').textContent=d.monitor_tgs_error?'Kunde inte läsa konfigurationen':(d.monitor_tgs&&d.monitor_tgs.length?d.monitor_tgs.map(tg=>'TG '+tg).join(' · '):'Inga permanent monitorerade talgrupper');
  $('monitor-tgs-error').textContent=d.monitor_tgs_error||'Läses från [ReflectorLogic] MONITOR_TGS i svxlink.conf';
  document.querySelectorAll('[data-live-tg]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.liveTg)===String(currentTG)));
- $('node').textContent=d.node_event||'Ingen identifierad händelse';$('nodetime').textContent=d.node_time||'';
  $('counts').textContent=d.errors+' · '+d.warnings+' · '+d.events;
  allLines=d.lines||[];renderLogs();const now=new Date().toLocaleTimeString('sv-SE');$('status-updated').textContent=now;$('updated').textContent='Uppdaterad '+now+' · visar '+allLines.length+' senaste loggrader';
  }catch(e){$('service').innerHTML='<span class="dot bad"></span>Kan inte läsa status';$('status-updated').textContent='Fel';$('updated').textContent='Fel vid uppdatering: '+e.message;}}
