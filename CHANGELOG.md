@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.4.1] - 2026-10-20
+
+### Fixed
+- Installationsscriptet stoppar en redan körande webbpanelstjänst innan filer uppdateras.
+
 ## [1.4] - 2026-10-20
 
 ### Added

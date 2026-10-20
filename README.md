@@ -1,6 +1,6 @@
-# SvxLink Webpanel v1.4 – installationspaket
+# SvxLink Webpanel v1.4.1 – installationspaket
 
-Installationspaketet innehåller `svxlink-webpanel.py` (v1.4), systemd-installation, konfiguration och avinstallation.
+Installationspaketet innehåller `svxlink-webpanel.py` (v1.4.1), systemd-installation, konfiguration och avinstallation.
 Panelen använder endast Python-standardbiblioteket.
 
 ## Krav

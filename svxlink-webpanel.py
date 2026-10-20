@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 
 HOST = os.environ.get("SVXLINK_WEB_HOST", "0.0.0.0")
 PORT = int(os.environ.get("SVXLINK_WEB_PORT", "8090"))
-VERSION = "1.4"
+VERSION = "1.4.1"
 LOGFILE = os.environ.get("SVXLINK_LOGFILE", "/var/log/svxlink")
 SERVICE = os.environ.get("SVXLINK_SERVICE", "svxlink")
 USERNAME = os.environ.get("SVXLINK_WEB_USER", "admin")

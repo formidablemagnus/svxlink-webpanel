@@ -46,6 +46,11 @@ if ! command -v crontab >/dev/null 2>&1; then
   exit 1
 fi
 
+if systemctl is-active --quiet svxlink-webpanel.service; then
+  echo "Webpanelens tjänst körs redan. Stoppar den före uppdateringen."
+  systemctl stop svxlink-webpanel.service
+fi
+
 if [[ -e "$APP_DST" ]]; then
   cp -a "$APP_DST" "${APP_DST}.bak.$(date +%Y%m%d-%H%M%S)"
   echo "Säkerhetskopia skapad av befintlig panel."
