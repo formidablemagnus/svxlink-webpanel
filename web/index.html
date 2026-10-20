@@ -5,12 +5,15 @@
 </head><body><main>
 <header><div><h1>SvxLink Control <span class="muted">v__VERSION__</span></h1><div class="muted">Status, händelser och loggar</div></div><div class="header-meta muted">Uppdateras automatiskt<br>Var 5:e sekund</div></header>
 <nav class="page-nav" aria-label="Huvudmeny"><a href="/" aria-current="page">Översikt</a><a href="/schedules">Schemaläggning</a></nav>
-<section class="status-banner" aria-label="Tjänstestatus"><div><div class="status-caption">SvxLink-tjänst</div><div class="status-value" id="service"><span class="dot" aria-hidden="true"></span>Hämtar…</div><div class="service-controls"><button id="service-start" type="button" disabled>Starta</button><button id="service-stop" class="danger-button" type="button" disabled>Stoppa</button></div><div class="muted service-result" id="service-result" role="status" aria-live="polite"></div></div><div class="status-right"><div class="status-caption">Senast uppdaterad</div><div class="status-value" id="status-updated">Väntar…</div></div></section>
+<div class="status-grid" aria-label="Statusöversikt">
+<section class="card status-card"><div class="status-caption">SvxLink-tjänst</div><div class="status-value" id="service"><span class="dot" aria-hidden="true"></span>Hämtar…</div><div class="service-controls"><button id="service-start" type="button" disabled>Starta</button><button id="service-stop" class="danger-button" type="button" disabled>Stoppa</button></div><div class="muted service-result" id="service-result" role="status" aria-live="polite"></div></section>
+<section class="card status-card"><div class="status-caption">Senast uppdaterad</div><div class="status-value" id="status-updated">Väntar…</div></section>
+<section class="card status-card"><div class="status-caption">Loggöversikt</div><div class="status-value" id="counts">—</div><div class="muted">Fel · varningar · händelser</div></section>
+</div>
 <div class="grid">
 <section class="card summary-card featured"><div class="k">Aktuell vald talgrupp</div><div class="v" id="currenttg">Okänd</div><div class="muted">Baserad på senaste ”Selecting TG” i loggen</div></section>
 <section class="card summary-card"><div class="k">Senaste talgruppshändelse</div><div class="v" id="tg">—</div><div class="muted" id="tgtime"></div></section>
 <section class="card summary-card"><div class="k">Senaste reflektorhändelse</div><div class="v" id="node">—</div><div class="muted" id="nodetime"></div></section>
-<section class="card summary-card"><div class="k">Loggöversikt</div><div class="v" id="counts">—</div><div class="muted">Fel · varningar · händelser</div></section>
 </div>
 <section class="card"><div class="section-heading"><div><h2>Talgrupper på reflektorn</h2>
 <div class="muted section-intro">Överblick över vad noderna lyssnar på just nu. TX visar noder som rapporterar pågående sändning.</div></div>
