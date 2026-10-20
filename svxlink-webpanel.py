@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 
 HOST = os.environ.get("SVXLINK_WEB_HOST", "0.0.0.0")
 PORT = int(os.environ.get("SVXLINK_WEB_PORT", "8090"))
+VERSION = "1.3"
 LOGFILE = os.environ.get("SVXLINK_LOGFILE", "/var/log/svxlink")
 SERVICE = os.environ.get("SVXLINK_SERVICE", "svxlink")
 USERNAME = os.environ.get("SVXLINK_WEB_USER", "admin")
@@ -29,7 +30,7 @@ REFLECTOR_PROXY_URL = os.environ.get("SVXLINK_REFLECTOR_PROXY_URL", "https://ref
 
 PAGE = r"""<!doctype html>
 <html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SvxLink Control v1.2</title>
+<title>SvxLink Control v__VERSION__</title>
 <style>
 :root{color-scheme:dark;--bg:#09111f;--panel:#111d2e;--panel-raised:#16243a;--line:#293b55;--text:#edf3fb;--muted:#a1b2c8;--green:#59dfa8;--red:#ff8189;--amber:#ffd166;--blue:#83bdff}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% -25%,#1a2c46 0,transparent 55%),var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
@@ -40,12 +41,14 @@ h1{font-size:1.65rem;letter-spacing:-.03em;margin:0}h2{font-size:1rem;letter-spa
 .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.card{background:linear-gradient(145deg,var(--panel-raised),var(--panel) 70%);border:1px solid var(--line);border-radius:14px;padding:17px;margin-bottom:14px;box-shadow:0 8px 24px #02081224}
 .summary-card{min-height:112px}.summary-card.featured{border-color:#385a7b;background:linear-gradient(145deg,#1b3551,#142238)}.k{letter-spacing:.035em;text-transform:none}.v{font-size:1.2rem;font-weight:720;margin-top:8px;overflow-wrap:anywhere;line-height:1.3}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--amber);margin-right:9px;box-shadow:0 0 12px currentColor}.ok{background:var(--green);color:var(--green)}.bad{background:var(--red);color:var(--red)}
+.service-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}.service-controls button{min-height:36px;padding:6px 11px}.service-result{min-height:1.4em;margin-top:5px}
 .toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:14px 0 10px}input,select,button{background:#0b1525;border:1px solid var(--line);color:var(--text);border-radius:9px;padding:10px 12px;font:inherit;min-height:42px}
 button{cursor:pointer;transition:border-color .15s ease,background-color .15s ease,transform .15s ease}button:hover{border-color:#7399c4;background:#182942}button:active{transform:translateY(1px)}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #83bdff;outline-offset:2px}
 input{flex:1;min-width:180px}input::placeholder{color:#8296af}.section-intro{max-width:780px}.tg-buttons{display:flex;flex-wrap:wrap;gap:9px;margin-top:16px}.tg-button{display:inline-flex;align-items:center;gap:7px}.tg-button[aria-pressed="true"]{border-color:var(--blue);background:#173251}.tg-button.tx{border-color:#4f987f}
 .badge{display:inline-flex;align-items:center;border-radius:99px;padding:2px 7px;font-size:.72rem;font-weight:750;letter-spacing:.03em;background:#20344d;color:#c9d8e9}.badge.tx{background:#174733;color:#a6f1cc}.section-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
 .danger-area{border-top:1px solid var(--line);padding-top:14px;margin-top:17px}.danger-button{border-color:#9b4d59;color:#ff9da3;background:#2a1821}.danger-button:hover{border-color:var(--red);background:#3a1e28}
 .admin-panel{background:#0c1727;border:1px solid var(--line);border-radius:11px;padding:16px;margin:14px 0}.admin-row{align-items:center}.status-message{min-height:1.4em;margin-top:10px}
+.admin-row.drag-over{border-radius:9px;outline:2px dashed var(--blue);outline-offset:3px}.drag-handle{cursor:grab;touch-action:none;min-width:42px;padding:8px}.drag-handle:active{cursor:grabbing}.drag-handle:focus-visible{outline:3px solid #83bdff;outline-offset:2px}
 .log-toolbar{display:grid;grid-template-columns:minmax(180px,1fr) minmax(155px,.45fr) auto;align-items:center;gap:9px;margin:14px 0 9px}.log-toolbar input{width:100%}.log-count{margin-left:auto}
 .log{height:55vh;min-height:300px;overflow:auto;background:#080e18;border:1px solid var(--line);border-radius:10px;padding:13px;font:12px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
 .logline{padding:3px 7px;border-bottom:1px solid #152033;border-left:2px solid transparent}.logline.warn{color:var(--amber);border-left-color:var(--amber)}.logline.err{color:var(--red);border-left-color:var(--red)}.logline.event{color:var(--blue);border-left-color:var(--blue)}
@@ -54,8 +57,8 @@ footer{color:var(--muted);font-size:.8rem;margin-top:12px}
 @media(max-width:520px){main{padding:14px 12px 24px}h1{font-size:1.45rem}.header-meta{text-align:left}.status-banner{align-items:flex-start;flex-direction:column;gap:10px}.status-right{text-align:left}.grid{grid-template-columns:1fr 1fr;gap:8px}.card{padding:14px;margin-bottom:10px}.summary-card{min-height:104px}.v{font-size:1.08rem}.toolbar{gap:7px}.toolbar>*{min-height:44px}.toolbar input{min-width:100%;width:100%}.log-toolbar{grid-template-columns:1fr}.log-toolbar input{grid-column:auto}.log-toolbar .log-count{grid-column:auto}.log{height:50vh;min-height:260px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
 </style></head><body><main>
-<header><div><h1>SvxLink Control <span class="muted">v1.2</span></h1><div class="muted">Status, händelser och loggar</div></div><div class="header-meta muted">Uppdateras automatiskt<br>Var 5:e sekund</div></header>
-<section class="status-banner" aria-label="Tjänstestatus"><div><div class="status-caption">SvxLink-tjänst</div><div class="status-value" id="service"><span class="dot" aria-hidden="true"></span>Hämtar…</div></div><div class="status-right"><div class="status-caption">Senast uppdaterad</div><div class="status-value" id="status-updated">Väntar…</div></div></section>
+<header><div><h1>SvxLink Control <span class="muted">v__VERSION__</span></h1><div class="muted">Status, händelser och loggar</div></div><div class="header-meta muted">Uppdateras automatiskt<br>Var 5:e sekund</div></header>
+<section class="status-banner" aria-label="Tjänstestatus"><div><div class="status-caption">SvxLink-tjänst</div><div class="status-value" id="service"><span class="dot" aria-hidden="true"></span>Hämtar…</div><div class="service-controls"><button id="service-start" type="button" disabled>Starta</button><button id="service-stop" class="danger-button" type="button" disabled>Stoppa</button></div><div class="muted service-result" id="service-result" role="status" aria-live="polite"></div></div><div class="status-right"><div class="status-caption">Senast uppdaterad</div><div class="status-value" id="status-updated">Väntar…</div></div></section>
 <div class="grid">
 <section class="card summary-card featured"><div class="k">Aktuell vald talgrupp</div><div class="v" id="currenttg">Okänd</div><div class="muted">Baserad på senaste ”Selecting TG” i loggen</div></section>
 <section class="card summary-card"><div class="k">Senaste talgruppshändelse</div><div class="v" id="tg">—</div><div class="muted" id="tgtime"></div></section>
@@ -74,7 +77,7 @@ footer{color:var(--muted);font-size:.8rem;margin-top:12px}
 <div class="toolbar"><button id="managebuttons" type="button">Administrera snabbval</button></div>
 <div id="buttonadmin" class="admin-panel" style="display:none">
 <h2>Administrera DTMF-knappar</h2>
-<div class="muted">Lägg till, ändra eller ta bort snabbknappar. Kommandon skickas direkt när du trycker på knappen.</div>
+<div class="muted">Lägg till, ändra, ta bort eller dra i handtaget för att ändra ordning på snabbknappar. Använd upp-/nedpilarna när handtaget har fokus. Kommandon skickas direkt när du trycker på knappen.</div>
 <div id="buttonrows"></div>
 <div class="toolbar"><button id="addbutton" type="button">Lägg till knapp</button><button id="savebuttons" type="button">Spara knappar</button><button id="cancelbuttons" type="button">Stäng</button></div>
 <div class="muted status-message" id="adminresult" role="status" aria-live="polite"></div>
@@ -96,6 +99,7 @@ footer{color:var(--muted);font-size:.8rem;margin-top:12px}
 const $=id=>document.getElementById(id);
 function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 let allLines=[],currentTG='';
+let serviceActionPending=false;
 function level(s){if(/ERROR|FATAL|CRITICAL/i.test(s))return'err';if(/WARNING|UDP frame\(s\) lost/i.test(s))return'warn';if(/ReflectorLogic|Talker start|Talker stop|Node joined|Node left|Selecting TG/i.test(s))return'event';return'';}
 function renderLogs(){const f=$('filter').value.toLowerCase(),k=$('kind').value;
  const filtered=allLines.filter(s=>(!f||s.toLowerCase().includes(f))&&(k==='all'||(k==='error'&&level(s)==='err')||(k==='warn'&&level(s)==='warn')||(k==='event'&&level(s)==='event')));
@@ -104,6 +108,7 @@ function renderLogs(){const f=$('filter').value.toLowerCase(),k=$('kind').value;
  }
 async function update(){try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);const d=await r.json();
  $('service').innerHTML='<span class="dot '+(d.active?'ok':'bad')+'"></span>'+esc(d.service_status);
+ $('service-start').disabled=d.active||serviceActionPending;$('service-stop').disabled=!d.active||serviceActionPending;
  $('tg').textContent=d.tg_event||'Ingen identifierad händelse';$('tgtime').textContent=d.tg_time||'';
  currentTG=d.current_tg||'';$('currenttg').textContent=currentTG ? ('TG '+currentTG) : 'Okänd';
  document.querySelectorAll('[data-live-tg]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.liveTg)===String(currentTG)));
@@ -124,18 +129,62 @@ async function updateReflector(){
 }
 let buttonDefinitions=[];
 function renderCommandButtons(){ $('tgbuttons').innerHTML=buttonDefinitions.map((b,i)=>'<button type="button" data-command-index="'+i+'">'+esc(b.label)+'</button>').join('');$('tgbuttons').querySelectorAll('[data-command-index]').forEach(el=>el.addEventListener('click',()=>sendCommand('dtmf:'+buttonDefinitions[Number(el.dataset.commandIndex)].command))); }
-function renderAdmin(){ $('buttonrows').innerHTML=buttonDefinitions.map((b,i)=>'<div class="toolbar admin-row"><input data-label="'+i+'" maxlength="40" placeholder="Knappnamn" aria-label="Knappnamn '+(i+1)+'" value="'+esc(b.label)+'"><input data-code="'+i+'" maxlength="20" placeholder="DTMF" aria-label="DTMF-kommando '+(i+1)+'" value="'+esc(b.command)+'"><button type="button" data-delete="'+i+'">Ta bort</button></div>').join(''); $('buttonrows').querySelectorAll('[data-delete]').forEach(el=>el.addEventListener('click',()=>{buttonDefinitions.splice(Number(el.dataset.delete),1);renderAdmin();})); }
+function readAdminRows(){return [...$('buttonrows').querySelectorAll('[data-label]')].map(el=>({label:el.value,command:$('buttonrows').querySelector('[data-code="'+el.dataset.label+'"]').value}));}
+function moveButton(from,to){
+ if(!Number.isInteger(from)||!Number.isInteger(to)||from===to||from<0||to<0||from>=buttonDefinitions.length||to>=buttonDefinitions.length)return;
+ const [button]=buttonDefinitions.splice(from,1);buttonDefinitions.splice(to,0,button);
+ renderAdmin();$('adminresult').textContent='Knappen flyttades. Spara för att behålla den nya ordningen.';
+ $('buttonrows').querySelector('[data-drag-handle="'+to+'"]').focus();
+}
+function renderAdmin(){
+ $('buttonrows').innerHTML=buttonDefinitions.map((b,i)=>'<div class="toolbar admin-row" data-button-index="'+i+'"><button class="drag-handle" type="button" draggable="true" data-drag-handle="'+i+'" aria-label="Flytta knapp '+(i+1)+': '+esc(b.label)+'" title="Dra för att flytta; använd upp-/nedpil för att ändra ordning">⠿</button><input data-label="'+i+'" maxlength="40" placeholder="Knappnamn" aria-label="Knappnamn '+(i+1)+'" value="'+esc(b.label)+'"><input data-code="'+i+'" maxlength="20" placeholder="DTMF" aria-label="DTMF-kommando '+(i+1)+'" value="'+esc(b.command)+'"><button type="button" data-delete="'+i+'">Ta bort</button></div>').join('');
+ $('buttonrows').querySelectorAll('[data-delete]').forEach(el=>el.addEventListener('click',()=>{buttonDefinitions=readAdminRows();buttonDefinitions.splice(Number(el.dataset.delete),1);renderAdmin();}));
+ $('buttonrows').querySelectorAll('[data-drag-handle]').forEach(handle=>{
+  handle.addEventListener('keydown',event=>{
+   if(event.key!=='ArrowUp'&&event.key!=='ArrowDown')return;
+   event.preventDefault();buttonDefinitions=readAdminRows();
+   const from=Number(handle.dataset.dragHandle),to=from+(event.key==='ArrowUp'?-1:1);moveButton(from,to);
+  });
+  handle.addEventListener('dragstart',event=>{
+   buttonDefinitions=readAdminRows();
+   event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain','svxlink-button:'+handle.dataset.dragHandle);
+  });
+ });
+ $('buttonrows').querySelectorAll('[data-button-index]').forEach(row=>{
+  row.addEventListener('dragover',event=>{event.preventDefault();event.dataTransfer.dropEffect='move';row.classList.add('drag-over');});
+  row.addEventListener('dragleave',event=>{if(!row.contains(event.relatedTarget))row.classList.remove('drag-over');});
+  row.addEventListener('drop',event=>{
+   event.preventDefault();row.classList.remove('drag-over');
+   const payload=event.dataTransfer.getData('text/plain'),match=payload.match(/^svxlink-button:(\d+)$/);
+   if(!match)return;
+   const from=Number(match[1]),to=Number(row.dataset.buttonIndex);
+   buttonDefinitions=readAdminRows();moveButton(from,to);
+  });
+ });
+}
 async function loadButtons(){try{const r=await fetch('/api/buttons',{cache:'no-store'});const d=await r.json();if(!r.ok)throw Error(d.error||'Kunde inte läsa knappar');buttonDefinitions=d.buttons||[];renderCommandButtons();}catch(e){$('commandresult').textContent='Kunde inte läsa snabbknappar: '+e.message;}}
-async function saveButtons(){const rows=[...$('buttonrows').querySelectorAll('[data-label]')];const next=rows.map(el=>({label:el.value,command:$('buttonrows').querySelector('[data-code="'+el.dataset.label+'"]').value}));try{const r=await fetch('/api/buttons',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({buttons:next}),cache:'no-store'});const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'Kunde inte spara');buttonDefinitions=d.buttons;renderCommandButtons();renderAdmin();$('adminresult').textContent='Knapparna sparades.';}catch(e){$('adminresult').textContent='Fel: '+e.message;}}
+async function saveButtons(){const next=readAdminRows();try{const r=await fetch('/api/buttons',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({buttons:next}),cache:'no-store'});const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'Kunde inte spara');buttonDefinitions=d.buttons;renderCommandButtons();renderAdmin();$('adminresult').textContent='Knapparna sparades.';}catch(e){$('adminresult').textContent='Fel: '+e.message;}}
 async function sendCommand(action){const result=$('commandresult');result.textContent='Skickar kommando…';
  try{const r=await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action}),cache:'no-store'});
  const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||('HTTP '+r.status));result.textContent=d.message;
  setTimeout(update,700);
  }catch(e){result.textContent='Kunde inte skicka kommandot: '+e.message;}}
+async function controlService(action){
+ const result=$('service-result');
+ if(action==='stop'&&!window.confirm('Stoppa SvxLink-tjänsten? Pågående trafik och anslutningar bryts.'))return;
+ serviceActionPending=true;$('service-start').disabled=true;$('service-stop').disabled=true;result.textContent=action==='start'?'Startar SvxLink…':'Stoppar SvxLink…';
+ try{
+  const r=await fetch('/api/service',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action}),cache:'no-store'});
+   const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||('HTTP '+r.status));result.textContent=d.message;
+ }catch(e){result.textContent='Kunde inte styra SvxLink: '+e.message;}
+  finally{serviceActionPending=false;setTimeout(update,700);}
+}
+ $('service-start').addEventListener('click',()=>controlService('start'));
+ $('service-stop').addEventListener('click',()=>controlService('stop'));
 document.querySelectorAll('[data-tg]').forEach(b=>b.addEventListener('click',()=>sendCommand('tg:'+b.dataset.tg)));
 $('disconnect').addEventListener('click',()=>{if(window.confirm('Vill du koppla från den aktuella reflektorn?'))sendCommand('disconnect');});
 $('managebuttons').addEventListener('click',()=>{$('buttonadmin').style.display=$('buttonadmin').style.display==='none'?'block':'none';renderAdmin();});
-$('addbutton').addEventListener('click',()=>{buttonDefinitions.push({label:'Ny knapp',command:''});renderAdmin();});
+$('addbutton').addEventListener('click',()=>{buttonDefinitions=readAdminRows();buttonDefinitions.push({label:'Ny knapp',command:''});renderAdmin();});
 $('savebuttons').addEventListener('click',saveButtons);
 $('cancelbuttons').addEventListener('click',()=>{$('buttonadmin').style.display='none';loadButtons();});
 $('senddtmf').addEventListener('click',()=>{
@@ -147,6 +196,7 @@ $('customdtmf').addEventListener('keydown',e=>{if(e.key==='Enter')$('senddtmf').
 $('filter').addEventListener('input',renderLogs);$('kind').addEventListener('change',renderLogs);$('refresh').addEventListener('click',update);
 loadButtons();update();updateReflector();setInterval(update,5000);setInterval(updateReflector,15000);
 </script></body></html>"""
+PAGE = PAGE.replace("__VERSION__", VERSION)
 
 def service_status():
     try:
@@ -158,6 +208,25 @@ def service_status():
         return value, value == "active"
     except Exception:
         return "okänt", False
+
+def control_service(action):
+    if action not in ("start", "stop"):
+        return {"ok": False, "error": "Otillåten tjänståtgärd."}, 400
+    try:
+        result = subprocess.run(
+            ["sudo", "-n", "/usr/bin/systemctl", action, SERVICE],
+            capture_output=True, text=True, timeout=15, check=False
+        )
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "Tidsgränsen överskreds när SvxLink skulle styras."}, 504
+    except OSError as exc:
+        return {"ok": False, "error": f"Kunde inte köra tjänstkommandot: {exc}"}, 500
+    if result.returncode != 0:
+        details = (result.stderr or result.stdout or "").strip()
+        if "a password is required" in details.lower() or "not allowed" in details.lower():
+            return {"ok": False, "error": "Panelen saknar behörighet att starta eller stoppa SvxLink. Kontrollera sudoers-konfigurationen."}, 500
+        return {"ok": False, "error": f"Kunde inte {('starta' if action == 'start' else 'stoppa')} SvxLink: {details or 'systemctl misslyckades.'}"}, 500
+    return {"ok": True, "message": f"SvxLink {('startas' if action == 'start' else 'stoppas')}."}, 200
 
 def read_log():
     try:
@@ -385,10 +454,10 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return
         post_path = urlparse(self.path).path
-        if post_path not in ("/api/command", "/api/buttons"):
+        if post_path not in ("/api/command", "/api/buttons", "/api/service"):
             self.send_error(404, "Not found")
             return
-        # POST requests are browser actions that can transmit DTMF or change controls.
+        # POST requests are browser actions that can transmit DTMF or control services.
         # Require a same-origin fetch request; browsers include Origin for these POSTs.
         origin = self.headers.get("Origin")
         host = self.headers.get("Host")
@@ -423,6 +492,9 @@ class Handler(BaseHTTPRequestHandler):
             if post_path == "/api/buttons":
                 saved = save_buttons(payload.get("buttons"))
                 result, status = {"ok": True, "buttons": saved}, 200
+            elif post_path == "/api/service":
+                action = payload.get("action", "")
+                result, status = control_service(action if isinstance(action, str) else "")
             else:
                 action = payload.get("action", "")
                 result, status = send_dtmf(action if isinstance(action, str) else "")

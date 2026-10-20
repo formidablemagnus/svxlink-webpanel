@@ -1,6 +1,6 @@
-# SvxLink Webpanel v1.2 – installationspaket
+# SvxLink Webpanel v1.3 – installationspaket
 
-Installationspaketet innehåller `svxlink-webpanel.py` (v1.2), systemd-installation, konfiguration och avinstallation.
+Installationspaketet innehåller `svxlink-webpanel.py` (v1.3), systemd-installation, konfiguration och avinstallation.
 Panelen använder endast Python-standardbiblioteket.
 
 ## Krav
@@ -28,6 +28,7 @@ Installationsscriptet:
 - binder tjänsten till alla IPv4-adresser på port 8090
 - sparar inställningar i `/etc/default/svxlink-webpanel`
 - sparar snabbknappar i `/var/lib/svxlink/webpanel-buttons.json`
+- lägger till en sudoers-regel som endast tillåter kontot `svxlink` att starta och stoppa `svxlink`
 - aktiverar och startar tjänsten
 - visar sökvägen till konfigurationsfilen när installationen är klar
 
@@ -71,6 +72,10 @@ sudo systemctl status svxlink-webpanel.service
 sudo journalctl -u svxlink-webpanel.service -n 80 --no-pager
 ```
 
+På statusraden i panelen finns knappar för att starta och stoppa SvxLink. Stopp kräver bekräftelse. Installationen lägger sudoers-regeln i `/etc/sudoers.d/svxlink-webpanel` och tillåter endast `systemctl start svxlink` och `systemctl stop svxlink` för panelkontot. Systemd-inställningen `NoNewPrivileges` är avstängd för paneltjänsten eftersom sudo annars inte kan använda sin begränsade behörighet. Om du ändrar `SVXLINK_SERVICE` från standardvärdet `svxlink` måste du även anpassa sudoers-regeln.
+
+Snabbknapparnas ordning ändras i **Administrera snabbval** genom att dra i handtaget bredvid en knapp. Tangentbordsanvändare kan fokusera handtaget och flytta knappen med upp- och nedpilarna. Klicka på **Spara knappar** för att spara den nya ordningen.
+
 ## Säkerhetsnoteringar
 
 - Standardinställningen binder till alla IPv4-gränssnitt. Begränsa därför åtkomsten till TCP-port 8090 med brandvägg.
@@ -96,7 +101,7 @@ Om tjänsten inte kan läsa loggen eller skriva DTMF, justera rättigheter enlig
 sudo ./uninstall.sh
 ```
 
-Avinstallationen tar bort tjänsten och programfilen men behåller konfiguration och snabbknappar. Ta bort `/etc/default/svxlink-webpanel` och `/var/lib/svxlink/webpanel-buttons.json` manuellt endast om du vill radera dessa också.
+Avinstallationen tar bort tjänsten, programfilen och panelens sudoers-regel men behåller konfiguration och snabbknappar. Ta bort `/etc/default/svxlink-webpanel` och `/var/lib/svxlink/webpanel-buttons.json` manuellt endast om du vill radera dessa också.
 
 
 ### Fix i version 10.1

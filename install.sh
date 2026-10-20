@@ -13,6 +13,7 @@ APP_DST="/usr/local/bin/svxlink-webpanel.py"
 ENV_FILE="/etc/default/svxlink-webpanel"
 SERVICE_FILE="/etc/systemd/system/svxlink-webpanel.service"
 BUTTONS_FILE="/var/lib/svxlink/webpanel-buttons.json"
+SUDOERS_FILE="/etc/sudoers.d/svxlink-webpanel"
 
 if [[ ! -f "$APP_SRC" ]]; then
   echo "Hittar inte $APP_SRC. Packa upp hela paketet och kör install.sh därifrån." >&2
@@ -26,6 +27,10 @@ fi
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "Python 3 saknas. Installera python3 och kör scriptet igen." >&2
+  exit 1
+fi
+if ! command -v visudo >/dev/null 2>&1; then
+  echo "visudo saknas. Installera sudo innan du installerar panelen." >&2
   exit 1
 fi
 
@@ -125,7 +130,7 @@ ExecStart=/usr/bin/python3 /usr/local/bin/svxlink-webpanel.py
 Restart=on-failure
 RestartSec=3
 UMask=0027
-NoNewPrivileges=true
+NoNewPrivileges=false
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
@@ -142,6 +147,17 @@ SystemCallArchitectures=native
 WantedBy=multi-user.target
 EOF_SERVICE
 chmod 0644 "$SERVICE_FILE"
+
+# Permit only the two service actions required by the panel.
+SUDOERS_TMP="$(mktemp /etc/sudoers.d/svxlink-webpanel.XXXXXX)"
+printf '%s\n' 'svxlink ALL=(root) NOPASSWD: /usr/bin/systemctl start svxlink, /usr/bin/systemctl stop svxlink' > "$SUDOERS_TMP"
+chmod 0440 "$SUDOERS_TMP"
+if ! visudo -cf "$SUDOERS_TMP"; then
+  rm -f "$SUDOERS_TMP"
+  echo "Sudoers-konfigurationen är ogiltig; avbryter installationen." >&2
+  exit 1
+fi
+mv "$SUDOERS_TMP" "$SUDOERS_FILE"
 
 systemctl daemon-reload
 systemctl enable --now svxlink-webpanel.service

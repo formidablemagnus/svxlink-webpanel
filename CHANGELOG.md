@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3] - 2026-10-20
+
+### Added
+- Knappar för att starta och stoppa SvxLink-tjänsten från webbpanelen.
+- Möjlighet att ändra snabbknapparnas ordning med drag-and-drop eller tangentbord.
+- Versionsnumret visas från en gemensam variabel i sidtiteln och panelrubriken.
+
 ## [1.2] - 2026-10-15
 
 ### Added
