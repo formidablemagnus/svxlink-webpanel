@@ -524,8 +524,8 @@ def status_data():
     if log_error:
         lines.append(log_error)
     tg, tgtime = latest_match(
-        lines, r"(Talker start|Talker stop) on TG #(24075|2407|2406|2405|2404|2403|2402|2401|2400|240|9)(?:[0-9]{3})?:\s*([^\s\x00]+)?",
-        lambda m: f"TG {m.group(2)} · {m.group(1)}" + (f" · {m.group(3).strip().split()[0]}" if m.group(3).strip() else "")
+        lines, r"(Talker start|Talker stop) on TG #([0-9]+)(?::\s*([^\s\x00]+))?",
+        lambda m: f"TG {m.group(2)} · {m.group(1)}" + (f" · {m.group(3)}" if m.group(3) else "")
     )
     current_tg, _ = latest_match(
         lines, r"Selecting TG #([0-9]+)",

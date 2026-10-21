@@ -9,6 +9,9 @@
 - Uppdaterar övrig status en gång per sekund; reflektorhämtningen ligger kvar på 15 sekunder.
 - Kontrollerar `DTMF_CTRL_PTY` och `STATE_PTY` och visar instruktioner när någon inställning saknas eller sökvägen inte fungerar.
 
+### Fixed
+- Gör senaste talgruppshändelse robust för alla talgruppsnummer och loggrader utan anropssignal efter kolon.
+
 ## [1.5.0] - 2026-10-20
 
 ### Added
