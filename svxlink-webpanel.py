@@ -36,6 +36,7 @@ CRONTAB_END = "# END SVXLINK-WEBPANEL MANAGED SCHEDULES"
 STATE_PTY_LOCK = threading.Lock()
 STATE_PTY_CACHE = {
     "key": None,
+    "fd": None,
     "buffer": b"",
     "receivers": {},
     "transmitters": {},
@@ -447,13 +448,17 @@ def read_config_callsign():
     return ""
 
 def reset_state_pty_cache():
+    fd = STATE_PTY_CACHE["fd"]
     STATE_PTY_CACHE.update({
         "key": None,
+        "fd": None,
         "buffer": b"",
         "receivers": {},
         "transmitters": {},
         "seen": False,
     })
+    if fd is not None:
+        os.close(fd)
 
 def read_radio_state(service_active):
     if not service_active:
@@ -484,29 +489,25 @@ def read_radio_state(service_active):
     key = (logic_name, state_pty)
     with STATE_PTY_LOCK:
         if STATE_PTY_CACHE["key"] != key:
-            STATE_PTY_CACHE.update({
-                "key": key,
-                "buffer": b"",
-                "receivers": {},
-                "transmitters": {},
-                "seen": False,
-            })
+            reset_state_pty_cache()
+            STATE_PTY_CACHE["key"] = key
 
         try:
-            fd = os.open(state_pty, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOCTTY", 0))
-            try:
-                remaining = 65536
-                while remaining > 0:
-                    try:
-                        chunk = os.read(fd, min(4096, remaining))
-                    except BlockingIOError:
-                        break
-                    if not chunk:
-                        break
-                    STATE_PTY_CACHE["buffer"] += chunk
-                    remaining -= len(chunk)
-            finally:
-                os.close(fd)
+            if STATE_PTY_CACHE["fd"] is None:
+                STATE_PTY_CACHE["fd"] = os.open(
+                    state_pty,
+                    os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOCTTY", 0),
+                )
+            remaining = 65536
+            while remaining > 0:
+                try:
+                    chunk = os.read(STATE_PTY_CACHE["fd"], min(4096, remaining))
+                except BlockingIOError:
+                    break
+                if not chunk:
+                    break
+                STATE_PTY_CACHE["buffer"] += chunk
+                remaining -= len(chunk)
         except OSError as exc:
             reset_state_pty_cache()
             return {"mode": "unknown", "signal_level": None, "error": f"Kunde inte läsa STATE_PTY {state_pty}: {exc}"}
