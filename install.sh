@@ -23,7 +23,7 @@ if [[ ! -f "$APP_SRC" || ! -f "$CONFIG_HELPER_SRC" ]]; then
   echo "Hittar inte panelprogrammet eller konfigurationshjälpen. Packa upp hela paketet och kör install.sh därifrån." >&2
   exit 1
 fi
-for web_file in index.html schedules.html config.html style.css common.js app.js schedules.js config.js; do
+for web_file in index.html schedules.html config.html node-info.html style.css common.js app.js schedules.js config.js node-info.js; do
   if [[ ! -f "$WEB_SRC/$web_file" ]]; then
     echo "Hittar inte $WEB_SRC/$web_file. Packa upp hela paketet och kör install.sh därifrån." >&2
     exit 1
@@ -110,7 +110,7 @@ trap 'finish_install $?' EXIT
 
 cp -- "$APP_SRC" "$STAGE_DIR/svxlink-webpanel.py"
 cp -- "$CONFIG_HELPER_SRC" "$STAGE_DIR/svxlink-webpanel-config.py"
-for web_file in index.html schedules.html config.html style.css common.js app.js schedules.js config.js; do
+for web_file in index.html schedules.html config.html node-info.html style.css common.js app.js schedules.js config.js node-info.js; do
   cp -- "$WEB_SRC/$web_file" "$STAGE_DIR/web/$web_file"
 done
 python3 -m py_compile "$STAGE_DIR/svxlink-webpanel.py" "$STAGE_DIR/svxlink-webpanel-config.py"
@@ -121,7 +121,7 @@ backup_target "$ENV_FILE"
 backup_target "$SERVICE_FILE"
 backup_target "$BUTTONS_FILE"
 backup_target "$SUDOERS_FILE"
-for web_file in index.html schedules.html config.html style.css common.js app.js schedules.js config.js; do
+for web_file in index.html schedules.html config.html node-info.html style.css common.js app.js schedules.js config.js node-info.js; do
   backup_target "$WEB_DST/$web_file"
 done
 BACKUPS_READY=1
@@ -144,7 +144,7 @@ install -o root -g root -m 0755 "$STAGE_DIR/svxlink-webpanel.py" "$APP_DST"
 install -d -o root -g root -m 0755 "$(dirname "$CONFIG_HELPER_DST")"
 install -o root -g root -m 0755 "$STAGE_DIR/svxlink-webpanel-config.py" "$CONFIG_HELPER_DST"
 install -d -o root -g root -m 0755 "$WEB_DST"
-for web_file in index.html schedules.html config.html style.css common.js app.js schedules.js config.js; do
+for web_file in index.html schedules.html config.html node-info.html style.css common.js app.js schedules.js config.js node-info.js; do
   install -o root -g root -m 0644 "$STAGE_DIR/web/$web_file" "$WEB_DST/$web_file"
 done
 

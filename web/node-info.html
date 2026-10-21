@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SvxLink Control__CALLSIGN_SUFFIX__ v__VERSION__ – Node info</title><link rel="stylesheet" href="/assets/style.css"></head><body><main>
+<header><div><h1>SvxLink Control__CALLSIGN_SUFFIX__ <span class="muted">v__VERSION__</span></h1><div class="muted">Redigera nodinformation</div></div><div class="header-meta muted">SvxLink Webpanel</div></header>
+<nav class="page-nav" aria-label="Huvudmeny"><a href="/">Översikt</a><a href="/schedules">Schemaläggning</a><a href="/config">Konfiguration</a><a href="/node-info" aria-current="page">Node info</a></nav>
+<section class="card">
+<div class="section-heading"><div><h2>node_info.json</h2><div class="muted">/etc/svxlink/node_info.json</div></div><button id="reload-node-info" type="button">Läs om filen</button></div>
+<p class="muted config-warning">Innehållet måste vara giltig JSON. En säkerhetskopia skapas automatiskt varje gång du sparar.</p>
+<label class="cron-field config-editor-label" for="node-info-content">JSON-innehåll<textarea id="node-info-content" class="config-editor" spellcheck="false" autocomplete="off" autocapitalize="off" disabled aria-describedby="node-info-message"></textarea></label>
+<div class="toolbar config-actions"><button id="save-node-info" type="button" disabled>Spara node_info.json</button></div>
+<div class="muted status-message" id="node-info-message" role="status" aria-live="polite">Läser node_info.json…</div>
+</section>
+<footer><a href="/">Tillbaka till översikten</a></footer>
+</main><script src="/assets/common.js" defer></script><script src="/assets/node-info.js" defer></script></body></html>

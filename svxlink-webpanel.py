@@ -80,6 +80,7 @@ WEB_ASSETS = {
     "/assets/app.js": ("app.js", "application/javascript; charset=utf-8"),
     "/assets/schedules.js": ("schedules.js", "application/javascript; charset=utf-8"),
     "/assets/config.js": ("config.js", "application/javascript; charset=utf-8"),
+    "/assets/node-info.js": ("node-info.js", "application/javascript; charset=utf-8"),
 }
 
 
@@ -159,6 +160,9 @@ def config_helper_request(payload):
         detail = response.get("error", "Konfigurationshjälpen misslyckades.") if isinstance(response, dict) else "Konfigurationshjälpen misslyckades."
         raise RuntimeError(detail)
     return response
+
+def reject_json_constant(value):
+    raise ValueError(f"Ogiltigt JSON-konstantvärde: {value}.")
 
 def read_log():
     try:
@@ -982,6 +986,8 @@ class Handler(BaseHTTPRequestHandler):
             filename, content_type = "schedules.html", "text/html; charset=utf-8"
         elif path in ("/config", "/config/"):
             filename, content_type = "config.html", "text/html; charset=utf-8"
+        elif path in ("/node-info", "/node-info/"):
+            filename, content_type = "node-info.html", "text/html; charset=utf-8"
         elif path in WEB_ASSETS:
             filename, content_type = WEB_ASSETS[path]
         else:
@@ -1043,6 +1049,16 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/config":
             try:
                 data = config_helper_request({"action": "read"})
+                status = 200
+            except RuntimeError as exc:
+                data, status = {"ok": False, "error": str(exc)}, 502
+            body = json.dumps(data, ensure_ascii=False).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+        elif path == "/api/node-info":
+            try:
+                data = config_helper_request({"action": "read_node_info"})
                 status = 200
             except RuntimeError as exc:
                 data, status = {"ok": False, "error": str(exc)}, 502
@@ -1164,7 +1180,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return
         post_path = urlparse(self.path).path
-        if post_path not in ("/api/command", "/api/buttons", "/api/service", "/api/schedules", "/api/config"):
+        if post_path not in ("/api/command", "/api/buttons", "/api/service", "/api/schedules", "/api/config", "/api/node-info"):
             self.send_error(404, "Not found")
             return
         # POST requests are browser actions that can transmit DTMF or control services.
@@ -1191,7 +1207,7 @@ class Handler(BaseHTTPRequestHandler):
             if not length_header.isdigit():
                 raise ValueError("Ogiltig Content-Length")
             length = int(length_header)
-            max_length = MAX_CONFIG_BYTES * 6 + 65536 if post_path == "/api/config" else (65536 if post_path == "/api/schedules" else 1024)
+            max_length = MAX_CONFIG_BYTES * 6 + 65536 if post_path in ("/api/config", "/api/node-info") else (65536 if post_path == "/api/schedules" else 1024)
             if length < 1 or length > max_length:
                 raise ValueError(f"Begäran måste vara mellan 1 och {max_length} byte")
             raw_body = self.rfile.read(length)
@@ -1222,6 +1238,27 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("Konfigurationsfilen måste vara mellan 1 byte och 2 MB och får inte innehålla NUL-tecken.")
                 result = config_helper_request({"action": "write", "content": content, "sha256": expected_hash})
                 result["message"] = "Konfigurationen sparades. En säkerhetskopia skapades."
+                status = 200
+            elif post_path == "/api/node-info":
+                content = payload.get("content")
+                if not isinstance(content, str):
+                    raise ValueError("node_info.json måste vara text.")
+                expected_hash = payload.get("sha256")
+                if not isinstance(expected_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_hash):
+                    raise ValueError("Ogiltig kontrollsumma för den inlästa node_info.json.")
+                content_size = len(content.encode("utf-8"))
+                if not content_size or content_size > MAX_CONFIG_BYTES or "\x00" in content:
+                    raise ValueError("node_info.json måste vara mellan 1 byte och 2 MB och får inte innehålla NUL-tecken.")
+                try:
+                    json.loads(content, parse_constant=reject_json_constant)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"Ogiltig JSON på rad {exc.lineno}, kolumn {exc.colno}: {exc.msg}") from exc
+                result = config_helper_request({
+                    "action": "write_node_info",
+                    "content": content,
+                    "sha256": expected_hash,
+                })
+                result["message"] = "node_info.json sparades. En säkerhetskopia skapades."
                 status = 200
             else:
                 action = payload.get("action", "")

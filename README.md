@@ -52,7 +52,7 @@ Låt NGINX hantera HTTPS-certifikatet. Behåll autentiseringen i panelen också.
 
 ## Webbgränssnittets filer
 
-Webbgränssnittet är uppdelat i `web/index.html`, `web/schedules.html`, `web/style.css` och JavaScript-filerna `web/common.js`, `web/app.js` och `web/schedules.js`. Översikten visas på `/` och schemaläggningen på `/schedules`. Installationen kopierar dessa filer till `/usr/local/share/svxlink-webpanel`; Python-servern hanterar API:et och serverar bara de uttryckligen tillåtna gränssnittsfilerna.
+Webbgränssnittet är uppdelat i separata HTML-, CSS- och JavaScript-filer under `web/`. Översikten visas på `/`, schemaläggningen på `/schedules`, SvxLink-konfigurationen på `/config` och nodinformationen på `/node-info`. Installationen kopierar dessa filer till `/usr/local/share/svxlink-webpanel`; Python-servern hanterar API:et och serverar bara de uttryckligen tillåtna gränssnittsfilerna.
 
 ## Konfiguration
 
@@ -94,7 +94,9 @@ Panelen kontrollerar även att den aktiva logiksektionen har `DTMF_CTRL_PTY` och
 
 Nya loggrader läses separat från `SVXLINK_LOGFILE` med en inkrementell filsvansning var 50:e millisekund och skickas direkt till webbläsaren via Server-Sent Events. Panelen läser bara tillagda byte efter första inläsningen, hanterar filrotation och trunkering och använder inte en extern `tail -f`-process. Loggsökning, filter och räknare uppdateras när nya kompletta rader kommer in. Övrig status, såsom tjänstestatus och senaste talgruppshändelser, uppdateras en gång per sekund. Reflektorstatus hämtas fortsatt var 15:e sekund.
 
-På sidan **Konfiguration** kan du redigera `/etc/svxlink/svxlink.conf`. Varje sparning skapar en säkerhetskopia bredvid filen med tidsstämpel. Sparning skriver atomiskt och bevarar filens ägare och rättigheter. Om filen har ändrats sedan den lästes in avbryts sparningen, så att externa ändringar inte skrivs över av misstag. Efter sparning väljer du själv när du startar om SvxLink med sidans separata omstartsknapp; en omstart bryter pågående trafik och anslutningar. Panelen använder ett root-ägt hjälpprogram med fast konfigurationssökväg, och systemd-enheten får skrivåtkomst till `/etc/svxlink` för den begränsade operationen. Hjälpprogrammet kan endast läsa och ersätta `/etc/svxlink/svxlink.conf`, inte godtyckliga filer.
+På sidan **Konfiguration** kan du redigera `/etc/svxlink/svxlink.conf`. Varje sparning skapar en säkerhetskopia bredvid filen med tidsstämpel. Sparning skriver atomiskt och bevarar filens ägare och rättigheter. Om filen har ändrats sedan den lästes in avbryts sparningen, så att externa ändringar inte skrivs över av misstag. Efter sparning väljer du själv när du startar om SvxLink med sidans separata omstartsknapp; en omstart bryter pågående trafik och anslutningar. Panelen använder ett root-ägt hjälpprogram med fasta filvägar, och systemd-enheten får skrivåtkomst till `/etc/svxlink` för de begränsade operationerna. Hjälpprogrammet kan endast läsa och ersätta `/etc/svxlink/svxlink.conf` och `/etc/svxlink/node_info.json`, inte godtyckliga filer.
+
+På sidan **Node info** kan du redigera `/etc/svxlink/node_info.json`. Innehållet kontrolleras som JSON innan det sparas. Varje sparning skapar en tidsstämplad säkerhetskopia, bevarar filens ägare och rättigheter och ersätter filen atomiskt. En kontrollsumma stoppar sparningen om filen har ändrats sedan den lästes in. Den privilegierade hjälpen har en separat, fast åtgärd för just `node_info.json`; webbförfrågan kan inte ange en godtycklig filväg.
 
 Snabbknapparnas ordning ändras i **Administrera snabbval** genom att dra i handtaget bredvid en knapp. Tangentbordsanvändare kan fokusera handtaget och flytta knappen med upp- och nedpilarna. Klicka på **Spara knappar** för att spara den nya ordningen.
 
