@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 
 HOST = os.environ.get("SVXLINK_WEB_HOST", "0.0.0.0")
 PORT = int(os.environ.get("SVXLINK_WEB_PORT", "8090"))
-VERSION = "1.5.0"
+VERSION = "1.6.0-dev1"
 LOGFILE = os.environ.get("SVXLINK_LOGFILE", "/var/log/svxlink")
 CONFIG_FILE = os.environ.get("SVXLINK_CONFIG", "/etc/svxlink/svxlink.conf")
 SERVICE = os.environ.get("SVXLINK_SERVICE", "svxlink")
