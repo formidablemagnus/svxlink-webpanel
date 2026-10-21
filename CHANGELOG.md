@@ -6,6 +6,7 @@
 - Visar RX/TX-läge och mottagen signalstyrka från `STATE_PTY` för den aktiva logiken.
 - Läser `STATE_PTY` kontinuerligt och skickar radiolägesändringar direkt till webbläsaren så att korta sändningsfönster inte försvinner mellan statuspollningar.
 - Följer loggfilen inkrementellt och skickar nya kompletta loggrader direkt till webbläsaren.
+- Uppdaterar övrig status en gång per sekund; reflektorhämtningen ligger kvar på 15 sekunder.
 
 ## [1.5.0] - 2026-10-20
 

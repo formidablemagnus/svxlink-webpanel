@@ -131,4 +131,4 @@ const logEvents=new EventSource('/api/log-events');
 logEvents.addEventListener('log-snapshot',event=>{try{applyLogSnapshot(JSON.parse(event.data));}catch(error){$('updated').textContent='Kunde inte läsa loggströmmen.';}});
 logEvents.addEventListener('log-reset',event=>{try{applyLogSnapshot(JSON.parse(event.data));}catch(error){$('updated').textContent='Kunde inte uppdatera loggströmmen.';}});
 logEvents.addEventListener('log-line',event=>{try{appendLogLine(JSON.parse(event.data));}catch(error){$('updated').textContent='Kunde inte läsa loggrad från strömmen.';}});
-loadButtons();update();updateReflector();setInterval(update,5000);setInterval(updateReflector,15000);
+loadButtons();update();updateReflector();setInterval(update,1000);setInterval(updateReflector,15000);

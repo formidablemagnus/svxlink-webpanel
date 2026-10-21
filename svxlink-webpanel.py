@@ -520,7 +520,9 @@ def send_dtmf(command):
 
 def status_data():
     ensure_radio_reader()
-    lines = read_log()
+    lines, log_error = log_tail_snapshot()
+    if log_error:
+        lines.append(log_error)
     tg, tgtime = latest_match(
         lines, r"(Talker start|Talker stop) on TG #(24075|2407|2406|2405|2404|2403|2402|2401|2400|240|9)(?:[0-9]{3})?:\s*([^\s\x00]+)?",
         lambda m: f"TG {m.group(2)} · {m.group(1)}" + (f" · {m.group(3).strip().split()[0]}" if m.group(3).strip() else "")
