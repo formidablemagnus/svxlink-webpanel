@@ -32,6 +32,8 @@ Installationsscriptet:
 - sparar inställningar i `/etc/default/svxlink-webpanel`
 - sparar snabbknappar i `/var/lib/svxlink/webpanel-buttons.json`
 - lägger till en sudoers-regel som endast tillåter kontot `svxlink` att starta och stoppa `svxlink`
+- förkontrollerar Python-filerna innan en uppdatering stoppar den befintliga tjänsten
+- återställer tidigare program-, webb-, tjänste- och panelinställningsfiler om installationen misslyckas, och startar om panelen om den körde före uppdateringen
 - aktiverar och startar tjänsten
 - visar sökvägen till konfigurationsfilen när installationen är klar
 

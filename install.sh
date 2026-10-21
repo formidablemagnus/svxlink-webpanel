@@ -48,7 +48,89 @@ if ! command -v crontab >/dev/null 2>&1; then
   exit 1
 fi
 
+INSTALL_TMP="$(mktemp -d /var/tmp/svxlink-webpanel-install.XXXXXX)"
+STAGE_DIR="$INSTALL_TMP/stage"
+BACKUP_DIR="$INSTALL_TMP/backup"
+mkdir -p "$STAGE_DIR/web" "$BACKUP_DIR"
+INSTALL_COMPLETE=0
+SERVICE_WAS_ACTIVE=0
+SERVICE_WAS_ENABLED=0
+BACKUPS_READY=0
+BACKUP_PATHS=()
+BACKUP_FILES=()
+BACKUP_EXISTED=()
+
+backup_target() {
+  local target="$1"
+  local index="${#BACKUP_PATHS[@]}"
+  BACKUP_PATHS+=("$target")
+  BACKUP_FILES+=("$BACKUP_DIR/$index")
+  if [[ -e "$target" || -L "$target" ]]; then
+    cp -a -- "$target" "$BACKUP_DIR/$index"
+    BACKUP_EXISTED+=(1)
+  else
+    BACKUP_EXISTED+=(0)
+  fi
+}
+
+finish_install() {
+  local exit_status="$1"
+  trap - EXIT
+  if (( exit_status != 0 && INSTALL_COMPLETE == 0 )); then
+    set +e
+    if (( BACKUPS_READY )); then
+      for ((index=${#BACKUP_PATHS[@]}-1; index>=0; index--)); do
+        if [[ "${BACKUP_EXISTED[$index]}" == "1" ]]; then
+          rm -f -- "${BACKUP_PATHS[$index]}"
+          cp -a -- "${BACKUP_FILES[$index]}" "${BACKUP_PATHS[$index]}"
+        else
+          rm -f -- "${BACKUP_PATHS[$index]}"
+        fi
+      done
+      systemctl daemon-reload
+      if (( SERVICE_WAS_ENABLED )); then
+        systemctl enable svxlink-webpanel.service
+      else
+        systemctl disable svxlink-webpanel.service
+      fi
+      echo "Installationen misslyckades; tidigare panel- och konfigurationsfiler har återställts." >&2
+    fi
+    if (( SERVICE_WAS_ACTIVE )); then
+      if systemctl start svxlink-webpanel.service; then
+        echo "Den tidigare webpanelstjänsten har startats igen." >&2
+      else
+        echo "Kunde inte starta den tidigare webpanelstjänsten. Kontrollera: journalctl -u svxlink-webpanel.service -n 80 --no-pager" >&2
+      fi
+    fi
+  fi
+  rm -rf -- "$INSTALL_TMP"
+  exit "$exit_status"
+}
+trap 'finish_install $?' EXIT
+
+cp -- "$APP_SRC" "$STAGE_DIR/svxlink-webpanel.py"
+cp -- "$CONFIG_HELPER_SRC" "$STAGE_DIR/svxlink-webpanel-config.py"
+for web_file in index.html schedules.html config.html style.css common.js app.js schedules.js config.js; do
+  cp -- "$WEB_SRC/$web_file" "$STAGE_DIR/web/$web_file"
+done
+python3 -m py_compile "$STAGE_DIR/svxlink-webpanel.py" "$STAGE_DIR/svxlink-webpanel-config.py"
+
+backup_target "$APP_DST"
+backup_target "$CONFIG_HELPER_DST"
+backup_target "$ENV_FILE"
+backup_target "$SERVICE_FILE"
+backup_target "$BUTTONS_FILE"
+backup_target "$SUDOERS_FILE"
+for web_file in index.html schedules.html config.html style.css common.js app.js schedules.js config.js; do
+  backup_target "$WEB_DST/$web_file"
+done
+BACKUPS_READY=1
+
+if systemctl is-enabled --quiet svxlink-webpanel.service; then
+  SERVICE_WAS_ENABLED=1
+fi
 if systemctl is-active --quiet svxlink-webpanel.service; then
+  SERVICE_WAS_ACTIVE=1
   echo "Webpanelens tjänst körs redan. Stoppar den före uppdateringen."
   systemctl stop svxlink-webpanel.service
 fi
@@ -58,13 +140,12 @@ if [[ -e "$APP_DST" ]]; then
   echo "Säkerhetskopia skapad av befintlig panel."
 fi
 
-install -o root -g root -m 0755 "$APP_SRC" "$APP_DST"
-python3 -m py_compile "$APP_DST"
+install -o root -g root -m 0755 "$STAGE_DIR/svxlink-webpanel.py" "$APP_DST"
 install -d -o root -g root -m 0755 "$(dirname "$CONFIG_HELPER_DST")"
-install -o root -g root -m 0755 "$CONFIG_HELPER_SRC" "$CONFIG_HELPER_DST"
+install -o root -g root -m 0755 "$STAGE_DIR/svxlink-webpanel-config.py" "$CONFIG_HELPER_DST"
 install -d -o root -g root -m 0755 "$WEB_DST"
 for web_file in index.html schedules.html config.html style.css common.js app.js schedules.js config.js; do
-  install -o root -g root -m 0644 "$WEB_SRC/$web_file" "$WEB_DST/$web_file"
+  install -o root -g root -m 0644 "$STAGE_DIR/web/$web_file" "$WEB_DST/$web_file"
 done
 
 install -d -o svxlink -g svxlink -m 0750 /var/lib/svxlink
@@ -190,6 +271,7 @@ systemctl daemon-reload
 systemctl enable --now svxlink-webpanel.service
 sleep 1
 if systemctl is-active --quiet svxlink-webpanel.service; then
+  INSTALL_COMPLETE=1
   echo "Installationen är klar och tjänsten kör."
 else
   echo "Tjänsten startade inte. Visa loggen med: journalctl -u svxlink-webpanel.service -n 80 --no-pager" >&2

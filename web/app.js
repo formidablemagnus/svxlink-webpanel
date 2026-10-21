@@ -126,7 +126,8 @@ async function sendCommand(action){const result=$('commandresult');result.textCo
  try{const r=await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action}),cache:'no-store'});
  const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||('HTTP '+r.status));result.textContent=d.message;
  setTimeout(update,700);
- }catch(e){result.textContent='Kunde inte skicka kommandot: '+e.message;}}
+ return true;
+ }catch(e){result.textContent='Kunde inte skicka kommandot: '+e.message;return false;}}
 async function controlService(action){
  const result=$('service-result');
  if(action==='stop'&&!window.confirm('Stoppa SvxLink-tjänsten? Pågående trafik och anslutningar bryts.'))return;
@@ -148,7 +149,7 @@ $('cancelbuttons').addEventListener('click',()=>{$('buttonadmin').style.display=
 $('senddtmf').addEventListener('click',()=>{
  const value=$('customdtmf').value.trim();
  if(!value){$('commandresult').textContent='Skriv ett DTMF-kommando först.';return;}
- sendCommand('dtmf:'+value);
+ sendCommand('dtmf:'+value).then(sent=>{if(sent)$('customdtmf').value='';});
 });
 $('customdtmf').addEventListener('keydown',e=>{if(e.key==='Enter')$('senddtmf').click();});
 $('filter').addEventListener('input',renderLogs);$('kind').addEventListener('change',renderLogs);$('refresh').addEventListener('click',update);

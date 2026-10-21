@@ -5,6 +5,7 @@ from collections import deque
 import html
 import hmac
 import json
+import logging
 import tempfile
 import os
 import re
@@ -64,6 +65,13 @@ LOG_TAIL_STATE = {
 CRONTAB_LOCK = threading.Lock()
 CONFIG_HELPER = "/usr/local/libexec/svxlink-webpanel-config"
 MAX_CONFIG_BYTES = 2 * 1024 * 1024
+CONFIG_CACHE_LOCK = threading.Lock()
+CONFIG_CACHE_KEY = None
+CONFIG_CACHE_SECTIONS = None
+SERVICE_STATUS_LOCK = threading.Lock()
+SERVICE_STATUS_CACHE = {"service": None, "checked_at": 0.0, "result": ("okänt", False)}
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 WEB_ROOT = os.environ.get("SVXLINK_WEB_ROOT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "web"))
 WEB_ASSETS = {
@@ -81,15 +89,31 @@ def read_web_file(filename):
 
 
 def service_status():
-    try:
-        result = subprocess.run(
-            ["systemctl", "is-active", SERVICE],
-            capture_output=True, text=True, timeout=2, check=False
-        )
-        value = (result.stdout or result.stderr).strip() or "okänt"
-        return value, value == "active"
-    except Exception:
-        return "okänt", False
+    now = time.monotonic()
+    with SERVICE_STATUS_LOCK:
+        if (SERVICE_STATUS_CACHE["service"] == SERVICE
+                and now - SERVICE_STATUS_CACHE["checked_at"] < 1):
+            return SERVICE_STATUS_CACHE["result"]
+        try:
+            result = subprocess.run(
+                ["systemctl", "is-active", SERVICE],
+                capture_output=True, text=True, timeout=2, check=False
+            )
+            value = (result.stdout or result.stderr).strip() or "okänt"
+            status = (value, value == "active")
+        except (OSError, subprocess.SubprocessError) as exc:
+            logging.warning("Kunde inte läsa status för tjänsten %s: %s", SERVICE, exc)
+            status = ("okänt", False)
+        SERVICE_STATUS_CACHE.update({
+            "service": SERVICE,
+            "checked_at": time.monotonic(),
+            "result": status,
+        })
+        return status
+
+def invalidate_service_status():
+    with SERVICE_STATUS_LOCK:
+        SERVICE_STATUS_CACHE["service"] = None
 
 def control_service(action):
     if action not in ("start", "stop", "restart"):
@@ -100,9 +124,12 @@ def control_service(action):
             capture_output=True, text=True, timeout=15, check=False
         )
     except subprocess.TimeoutExpired:
+        invalidate_service_status()
         return {"ok": False, "error": "Tidsgränsen överskreds när SvxLink skulle styras."}, 504
     except OSError as exc:
+        invalidate_service_status()
         return {"ok": False, "error": f"Kunde inte köra tjänstkommandot: {exc}"}, 500
+    invalidate_service_status()
     if result.returncode != 0:
         details = (result.stderr or result.stdout or "").strip()
         if "a password is required" in details.lower() or "not allowed" in details.lower():
@@ -547,22 +574,37 @@ def status_data():
             "errors": errors, "warnings": warnings, "events": events}
 
 def read_config_sections():
-    sections = {}
-    current_section = None
-    with open(CONFIG_FILE, "r", encoding="utf-8") as config_file:
-        for raw_line in config_file:
-            line = raw_line.strip()
-            if not line or line.startswith(("#", ";")):
-                continue
-            if line.startswith("[") and "]" in line:
-                current_section = line[1:line.index("]")].strip()
-                sections.setdefault(current_section, {})
-                continue
-            if current_section is None or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            sections[current_section][key.strip()] = value.split("#", 1)[0].split(";", 1)[0].strip()
-    return sections
+    global CONFIG_CACHE_KEY, CONFIG_CACHE_SECTIONS
+    with CONFIG_CACHE_LOCK:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as config_file:
+            file_stat = os.fstat(config_file.fileno())
+            cache_key = (
+                file_stat.st_dev,
+                file_stat.st_ino,
+                file_stat.st_size,
+                file_stat.st_mtime_ns,
+            )
+            if cache_key == CONFIG_CACHE_KEY:
+                return CONFIG_CACHE_SECTIONS
+
+            sections = {}
+            current_section = None
+            for raw_line in config_file:
+                line = raw_line.strip()
+                if not line or line.startswith(("#", ";")):
+                    continue
+                if line.startswith("[") and "]" in line:
+                    current_section = line[1:line.index("]")].strip()
+                    sections.setdefault(current_section, {})
+                    continue
+                if current_section is None or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                sections[current_section][key.strip()] = value.split("#", 1)[0].split(";", 1)[0].strip()
+
+            CONFIG_CACHE_KEY = cache_key
+            CONFIG_CACHE_SECTIONS = sections
+            return sections
 
 def read_active_logics(sections):
     active_logics = []
@@ -707,12 +749,15 @@ def radio_reader_loop():
     service_checked_at = 0
     service_active = False
     while True:
-        now = time.monotonic()
-        if now >= service_checked_at:
-            _, service_active = service_status()
-            service_checked_at = now + 1
-        read_radio_state(service_active)
-        read_log_tail_updates()
+        try:
+            now = time.monotonic()
+            if now >= service_checked_at:
+                _, service_active = service_status()
+                service_checked_at = now + 1
+            read_radio_state(service_active)
+            read_log_tail_updates()
+        except Exception:
+            logging.exception("Fel i bakgrundsläsaren för SvxLink-status och loggar")
         time.sleep(0.05)
 
 def ensure_radio_reader():
@@ -840,25 +885,12 @@ def read_radio_state(service_active):
         return state
 
 def read_monitor_tgs():
-    section_found = False
-    monitor_value = None
     try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as config_file:
-            for line in config_file:
-                line = line.strip()
-                if not line or line.startswith(("#", ";")):
-                    continue
-                if line.startswith("[") and "]" in line:
-                    section_found = line[1:line.index("]")].strip() == "ReflectorLogic"
-                    continue
-                if not section_found or "=" not in line:
-                    continue
-                key, value = line.split("=", 1)
-                if key.strip() == "MONITOR_TGS":
-                    monitor_value = value.split("#", 1)[0].split(";", 1)[0].strip()
+        sections = read_config_sections()
     except (OSError, UnicodeError) as exc:
         return [], f"Kunde inte läsa {CONFIG_FILE}: {exc}"
 
+    monitor_value = sections.get("ReflectorLogic", {}).get("MONITOR_TGS")
     if monitor_value is None:
         return [], "MONITOR_TGS saknas i [ReflectorLogic]."
     if not monitor_value:
@@ -984,8 +1016,18 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
         elif path == "/api/buttons":
-            body = json.dumps({"buttons": load_buttons()}, ensure_ascii=False).encode()
-            self.send_response(200)
+            try:
+                data = {"buttons": load_buttons()}
+                status = 200
+            except (OSError, UnicodeError, ValueError):
+                logging.exception("Kunde inte läsa snabbknappsfilen %s", BUTTONS_FILE)
+                data = {
+                    "ok": False,
+                    "error": "Snabbknapparnas fil är ogiltig eller kan inte läsas. Kontrollera JSON-formatet och filrättigheterna.",
+                }
+                status = 500
+            body = json.dumps(data, ensure_ascii=False).encode()
+            self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
         elif path == "/api/schedules":
