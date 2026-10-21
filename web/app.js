@@ -30,9 +30,13 @@ function applyLogSnapshot(snapshot){
  allLines=allLines.slice(-250);renderLogs();
 }
 function updateRadio(radio){
- const state=radio||{},radioModes={tx:['transmit','TX'],rx:['ok','RX'],idle:['','Vila'],unknown:['','Okänd']},radioMode=radioModes[state.mode]||radioModes.unknown;
+ const state=radio||{},radioModes={tx:['bad','TX'],rx:['ok','RX'],idle:['transmit','Vila'],unknown:['','Okänd']},radioMode=radioModes[state.mode]||radioModes.unknown;
  $('radio-mode').innerHTML='<span class="dot '+radioMode[0]+'"></span>'+radioMode[1];
- $('radio-signal').textContent=state.mode==='rx'&&Number.isInteger(state.signal_level)?'Signalstyrka: '+state.signal_level+' %':'Signalstyrka visas vid RX.';
+ const hasSignal=state.mode==='rx'&&Number.isInteger(state.signal_level),signalLevel=hasSignal?Math.max(0,Math.min(state.signal_level,100)):0;
+ $('radio-signal').textContent=hasSignal?'Signalstyrka: '+signalLevel+' %':'Signalstyrka visas vid RX.';
+ $('radio-signal-meter').hidden=!hasSignal;
+ $('radio-signal-meter').setAttribute('aria-valuenow',String(signalLevel));
+ $('radio-signal-fill').style.width=signalLevel+'%';
  $('radio-state-error').textContent=state.error||'';
 }
 async function update(){try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);const d=await r.json();
