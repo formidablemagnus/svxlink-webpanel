@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.6.0-dev1] - 2026-10-21
+## [1.6.0-dev2] - 2026-10-21
 
 ### Added
 - Använder en gemensam reflektorström med lokala SSE-uppdateringar i stället för återkommande reflektorpollning från varje webbläsare.
