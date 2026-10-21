@@ -74,16 +74,17 @@ async function update(){try{const r=await fetch('/api/status',{cache:'no-store'}
  $('counts').textContent=d.errors+' · '+d.warnings+' · '+d.events;
  if(!logStreamReady)allLines=d.lines||[];renderLogs();const now=new Date().toLocaleTimeString('sv-SE');$('status-updated').textContent=now;$('updated').textContent='Uppdaterad '+now+' · visar '+allLines.length+' senaste loggrader';
  }catch(e){$('service').innerHTML='<span class="dot bad"></span>Kan inte läsa status';$('status-updated').textContent='Fel';$('updated').textContent='Fel vid uppdatering: '+e.message;}}
-async function updateReflector(){
- try{
-  const r=await fetch('/api/reflector',{cache:'no-store'});const d=await r.json();
-  if(!r.ok||!d.ok)throw Error(d.error||('HTTP '+r.status));
-  const groups=d.talkgroups||[];
-  $('dynamic-tg-buttons').innerHTML=groups.length?groups.map(tg=>'<button class="tg-button'+(tg.talkers?' tx':'')+'" type="button" data-live-tg="'+esc(String(tg.tg))+'" aria-pressed="'+(String(tg.tg)===String(currentTG))+'" aria-label="Välj talgrupp '+esc(String(tg.tg))+', '+tg.nodes+' noder'+(tg.talkers?', '+tg.talkers+' sänder':'')+'">TG '+esc(String(tg.tg))+'<span class="badge">'+tg.nodes+' nod'+(tg.nodes===1?'':'er')+'</span>'+(tg.talkers?'<span class="badge tx">TX '+tg.talkers+'</span>':'')+'</button>').join(''):'<span class="muted">Inga noder har valt en talgrupp över 0 just nu.</span>';
-  $('dynamic-tg-buttons').querySelectorAll('[data-live-tg]').forEach(el=>el.addEventListener('click',()=>sendCommand('tg:'+el.dataset.liveTg)));
-  $('reflector-nodes').textContent=d.node_count+' synliga noder';
-  $('reflector-updated').textContent='Uppdaterad '+new Date().toLocaleTimeString('sv-SE');
- }catch(e){$('reflector-nodes').textContent='Status saknas';$('dynamic-tg-buttons').innerHTML='<span class="muted">Kunde inte läsa reflektorstatus: '+esc(e.message)+'</span>';}
+function updateReflector(d){
+ if(!d.ok){
+  $('reflector-nodes').textContent='Status saknas';
+  $('reflector-updated').textContent=d.error||'Ansluter till reflektorströmmen…';
+  return;
+ }
+ const groups=d.talkgroups||[];
+ $('dynamic-tg-buttons').innerHTML=groups.length?groups.map(tg=>'<button class="tg-button'+(tg.talkers?' tx':'')+'" type="button" data-live-tg="'+esc(String(tg.tg))+'" aria-pressed="'+(String(tg.tg)===String(currentTG))+'" aria-label="Välj talgrupp '+esc(String(tg.tg))+', '+tg.nodes+' noder'+(tg.talkers?', '+tg.talkers+' sänder':'')+'">TG '+esc(String(tg.tg))+'<span class="badge">'+tg.nodes+' nod'+(tg.nodes===1?'':'er')+'</span>'+(tg.talkers?'<span class="badge tx">TX '+tg.talkers+'</span>':'')+'</button>').join(''):'<span class="muted">Inga noder har valt en talgrupp över 0 just nu.</span>';
+ $('dynamic-tg-buttons').querySelectorAll('[data-live-tg]').forEach(el=>el.addEventListener('click',()=>sendCommand('tg:'+el.dataset.liveTg)));
+ $('reflector-nodes').textContent=d.node_count+' synliga noder';
+ $('reflector-updated').textContent=d.connected?'Live · uppdaterad '+new Date(d.updated_at||Date.now()).toLocaleTimeString('sv-SE'):(d.error||'Reflektorströmmen är frånkopplad.');
 }
 let buttonDefinitions=[];
 function renderCommandButtons(){ $('tgbuttons').innerHTML=buttonDefinitions.map((b,i)=>'<button type="button" data-command-index="'+i+'">'+esc(b.label)+'</button>').join('');$('tgbuttons').querySelectorAll('[data-command-index]').forEach(el=>el.addEventListener('click',()=>sendCommand('dtmf:'+buttonDefinitions[Number(el.dataset.commandIndex)].command))); }
@@ -161,4 +162,7 @@ const logEvents=new EventSource('/api/log-events');
 logEvents.addEventListener('log-snapshot',event=>{try{applyLogSnapshot(JSON.parse(event.data));}catch(error){$('updated').textContent='Kunde inte läsa loggströmmen.';}});
 logEvents.addEventListener('log-reset',event=>{try{applyLogSnapshot(JSON.parse(event.data));}catch(error){$('updated').textContent='Kunde inte uppdatera loggströmmen.';}});
 logEvents.addEventListener('log-line',event=>{try{appendLogLine(JSON.parse(event.data));}catch(error){$('updated').textContent='Kunde inte läsa loggrad från strömmen.';}});
-loadButtons();update();updateReflector();setInterval(update,1000);setInterval(updateReflector,15000);
+const reflectorEvents=new EventSource('/api/reflector-events');
+reflectorEvents.addEventListener('reflector',event=>{try{updateReflector(JSON.parse(event.data));}catch(error){$('reflector-updated').textContent='Kunde inte läsa reflektorströmmen.';}});
+reflectorEvents.addEventListener('error',()=>{if($('reflector-updated').textContent==='Ansluter till reflektorströmmen…')$('reflector-updated').textContent='Ansluter till reflektorströmmen…';});
+loadButtons();update();setInterval(update,1000);

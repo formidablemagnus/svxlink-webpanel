@@ -3,6 +3,7 @@
 ## [1.6.0-dev1] - 2026-10-21
 
 ### Added
+- Använder en gemensam reflektorström med lokala SSE-uppdateringar i stället för återkommande reflektorpollning från varje webbläsare.
 - Redigering av `/etc/svxlink/node_info.json` på en egen sida med JSON-validering och automatisk säkerhetskopia.
 - Visar RX/TX-läge och mottagen signalstyrka från `STATE_PTY` för den aktiva logiken.
 - Läser `STATE_PTY` kontinuerligt och skickar radiolägesändringar direkt till webbläsaren så att korta sändningsfönster inte försvinner mellan statuspollningar.

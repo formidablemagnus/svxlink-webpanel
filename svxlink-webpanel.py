@@ -16,6 +16,7 @@ import threading
 import time
 import urllib.request
 import urllib.error
+import uuid
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
@@ -32,6 +33,7 @@ MAX_LOG_BYTES = 256 * 1024
 MAX_LINES = 250
 BUTTONS_FILE = os.environ.get("SVXLINK_BUTTONS_FILE", "/var/lib/svxlink/webpanel-buttons.json")
 REFLECTOR_PROXY_URL = os.environ.get("SVXLINK_REFLECTOR_PROXY_URL", "https://reflector-sm.svxlink.org/reflector_proxy")
+REFLECTOR_STREAM_URL = os.environ.get("SVXLINK_REFLECTOR_STREAM_URL", "https://reflector-sm.svxlink.org/api/stream")
 CRONTAB_COMMAND = "crontab"
 CRONTAB_START = "# BEGIN SVXLINK-WEBPANEL MANAGED SCHEDULES"
 CRONTAB_END = "# END SVXLINK-WEBPANEL MANAGED SCHEDULES"
@@ -70,6 +72,20 @@ CONFIG_CACHE_KEY = None
 CONFIG_CACHE_SECTIONS = None
 SERVICE_STATUS_LOCK = threading.Lock()
 SERVICE_STATUS_CACHE = {"service": None, "checked_at": 0.0, "result": ("okänt", False)}
+REFLECTOR_EVENT_CONDITION = threading.Condition()
+REFLECTOR_EVENT_SEQUENCE = 0
+REFLECTOR_EVENTS = deque(maxlen=1024)
+REFLECTOR_STREAM_STARTED = False
+REFLECTOR_STREAM_STATE = {
+    "ok": False,
+    "connected": False,
+    "error": "Ansluter till reflektorströmmen.",
+    "node_count": 0,
+    "talkgroups": [],
+    "updated_at": None,
+}
+REFLECTOR_DOCUMENT = {}
+REFLECTOR_GENERATION = None
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -910,6 +926,224 @@ def read_monitor_tgs():
             talkgroups.append(normalized_item)
     return talkgroups, None
 
+def summarize_reflector_nodes(nodes, include_callsigns=True):
+    if not isinstance(nodes, dict):
+        raise ValueError("Reflektorströmmen saknar ett giltigt nodes-objekt.")
+    by_tg = {}
+    visible_count = 0
+    for callsign, node in nodes.items():
+        if not isinstance(node, dict) or node.get("hidden", False):
+            continue
+        visible_count += 1
+        try:
+            tg = int(node.get("tg", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        if tg <= 0:
+            continue
+        entry = by_tg.setdefault(tg, {"tg": tg, "nodes": 0, "talkers": 0})
+        if include_callsigns:
+            entry.setdefault("callsigns", [])
+        entry["nodes"] += 1
+        if node.get("isTalker") is True:
+            entry["talkers"] += 1
+        if include_callsigns:
+            entry["callsigns"].append(str(callsign))
+    talkgroups = sorted(by_tg.values(), key=lambda item: (-item["talkers"], -item["nodes"], item["tg"]))
+    return {"node_count": visible_count, "talkgroups": talkgroups}
+
+def json_pointer_parent(document, pointer):
+    if not isinstance(pointer, str) or not pointer.startswith("/"):
+        raise ValueError("Ogiltig JSON Pointer i reflektorströmmen.")
+    parts = [part.replace("~1", "/").replace("~0", "~") for part in pointer[1:].split("/")]
+    parent = document
+    for part in parts[:-1]:
+        if isinstance(parent, list):
+            parent = parent[int(part)]
+        elif isinstance(parent, dict):
+            parent = parent[part]
+        else:
+            raise ValueError("Ogiltig sökväg i reflektorströmmen.")
+    return parent, parts[-1]
+
+def apply_reflector_patch(document, operations):
+    if not isinstance(operations, list):
+        raise ValueError("Reflektorströmmen innehåller en ogiltig patch.")
+    for operation in operations:
+        if not isinstance(operation, dict) or operation.get("op") not in ("add", "remove", "replace"):
+            raise ValueError("Reflektorströmmen innehåller en okänd patch-åtgärd.")
+        parent, key = json_pointer_parent(document, operation.get("path"))
+        action = operation["op"]
+        if isinstance(parent, list):
+            if action == "add":
+                index = len(parent) if key == "-" else int(key)
+                parent.insert(index, operation.get("value"))
+            elif action == "remove":
+                del parent[int(key)]
+            else:
+                parent[int(key)] = operation["value"]
+        elif isinstance(parent, dict):
+            if action == "remove":
+                del parent[key]
+            else:
+                parent[key] = operation["value"]
+        else:
+            raise ValueError("Ogiltig måltyp i reflektorströmmen.")
+    return document
+
+def reflector_patch_affects_summary(operations):
+    for operation in operations:
+        path = operation.get("path")
+        if not isinstance(path, str) or not path.startswith("/nodes"):
+            continue
+        parts = [part.replace("~1", "/").replace("~0", "~") for part in path[1:].split("/")]
+        if not parts or parts[0] != "nodes":
+            continue
+        if parts == ["nodes"] or len(parts) == 2:
+            return True
+        if len(parts) >= 3 and parts[2] in ("hidden", "tg", "isTalker"):
+            return True
+    return False
+
+def publish_reflector_state(state):
+    global REFLECTOR_EVENT_SEQUENCE, REFLECTOR_STREAM_STATE
+    with REFLECTOR_EVENT_CONDITION:
+        if state == REFLECTOR_STREAM_STATE:
+            return
+        REFLECTOR_STREAM_STATE = state
+        REFLECTOR_EVENT_SEQUENCE += 1
+        REFLECTOR_EVENTS.append((REFLECTOR_EVENT_SEQUENCE, state))
+        REFLECTOR_EVENT_CONDITION.notify_all()
+
+def handle_reflector_stream_event(event_name, payload):
+    global REFLECTOR_DOCUMENT, REFLECTOR_GENERATION
+    if event_name == "source":
+        if not isinstance(payload, dict) or payload.get("topic") != "status":
+            return
+        source = payload.get("source")
+        connected = isinstance(source, dict) and source.get("connected") is True
+        current = REFLECTOR_STREAM_STATE
+        publish_reflector_state({
+            **current,
+            "connected": connected,
+            "error": None if connected and current["ok"] else (
+                source.get("error") if isinstance(source, dict) and source.get("error") else
+                "Väntar på statusdata från reflektorn." if connected else "Reflektorströmmen är frånkopplad."
+            ),
+        })
+        return
+    if event_name != "patch" or not isinstance(payload, dict) or payload.get("topic") != "status":
+        return
+
+    generation = payload.get("gen")
+    if REFLECTOR_GENERATION is not None and generation != REFLECTOR_GENERATION:
+        REFLECTOR_DOCUMENT = {}
+    REFLECTOR_GENERATION = generation
+    try:
+        operations = payload.get("patch")
+        apply_reflector_patch(REFLECTOR_DOCUMENT, operations)
+        if not reflector_patch_affects_summary(operations):
+            return
+        summary = summarize_reflector_nodes(REFLECTOR_DOCUMENT.get("nodes"), include_callsigns=False)
+    except (KeyError, TypeError, ValueError, IndexError) as exc:
+        logging.warning("Ogiltig statuspatch från reflektorn: %s", exc)
+        current = REFLECTOR_STREAM_STATE
+        publish_reflector_state({
+            **current,
+            "connected": True,
+            "error": f"Kunde inte tolka reflektorstatus: {exc}",
+        })
+        return
+
+    current = REFLECTOR_STREAM_STATE
+    same_summary = (
+        current["node_count"] == summary["node_count"]
+        and current["talkgroups"] == summary["talkgroups"]
+    )
+    if same_summary and current["ok"] and current["connected"]:
+        return
+    publish_reflector_state({
+        "ok": True,
+        "connected": True,
+        "error": None,
+        **summary,
+        "updated_at": payload.get("ts"),
+    })
+
+def reflector_stream_loop():
+    global REFLECTOR_DOCUMENT, REFLECTOR_GENERATION
+    retry_delay = 1
+    while True:
+        REFLECTOR_DOCUMENT = {}
+        REFLECTOR_GENERATION = None
+        request_body = json.dumps(
+            {"id": str(uuid.uuid4()), "seq": 1, "topics": {"status": 1}},
+            separators=(",", ":"),
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            REFLECTOR_STREAM_URL,
+            data=request_body,
+            headers={
+                "Accept": "text/event-stream",
+                "Content-Type": "application/json",
+                "Origin": "https://reflector-sm.svxlink.org",
+                "Referer": "https://reflector-sm.svxlink.org/nodes",
+                "User-Agent": "SvxLinkWebPanel/1.6",
+            },
+            method="POST",
+        )
+        connection_opened_at = None
+        try:
+            with urllib.request.urlopen(request, timeout=45) as response:
+                if response.status != 200:
+                    raise RuntimeError(f"Reflektorströmmen svarade med HTTP {response.status}.")
+                if "text/event-stream" not in response.headers.get("Content-Type", "").lower():
+                    raise RuntimeError("Reflektorströmmen returnerade inte text/event-stream.")
+                connection_opened_at = time.monotonic()
+                event_name = "message"
+                data_lines = []
+                while True:
+                    raw_line = response.readline()
+                    if not raw_line:
+                        raise ConnectionError("Reflektorströmmen stängdes.")
+                    if len(raw_line) > 5 * 1024 * 1024:
+                        raise ValueError("En SSE-rad från reflektorn överskred 5 MB.")
+                    line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+                    if not line:
+                        if data_lines and event_name in ("source", "patch"):
+                            event_data = json.loads("\n".join(data_lines))
+                            handle_reflector_stream_event(event_name, event_data)
+                        event_name = "message"
+                        data_lines = []
+                    elif line.startswith(":"):
+                        continue
+                    elif line.startswith("event:"):
+                        event_name = line[6:].strip()
+                    elif line.startswith("data:"):
+                        data_lines.append(line[5:].lstrip())
+                        if sum(map(len, data_lines)) > 5 * 1024 * 1024:
+                            raise ValueError("En SSE-händelse från reflektorn överskred 5 MB.")
+        except Exception as exc:
+            logging.warning("Reflektorströmmen tappades: %s", exc)
+            if connection_opened_at is not None and time.monotonic() - connection_opened_at >= 30:
+                retry_delay = 1
+            current = REFLECTOR_STREAM_STATE
+            publish_reflector_state({
+                **current,
+                "connected": False,
+                "error": f"Reflektorströmmen är tillfälligt otillgänglig: {exc}",
+            })
+            time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, 30)
+
+def ensure_reflector_stream():
+    global REFLECTOR_STREAM_STARTED
+    with REFLECTOR_EVENT_CONDITION:
+        if REFLECTOR_STREAM_STARTED:
+            return
+        REFLECTOR_STREAM_STARTED = True
+    threading.Thread(target=reflector_stream_loop, name="svxlink-reflector-reader", daemon=True).start()
+
 def reflector_status_data():
     """Fetch and summarize public reflector_proxy JSON without blocking long."""
     req = urllib.request.Request(
@@ -979,6 +1213,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/log-events":
             self.serve_log_events()
+            return
+        if path == "/api/reflector-events":
+            self.serve_reflector_events()
             return
         if path == "/":
             filename, content_type = "index.html", "text/html; charset=utf-8"
@@ -1171,6 +1408,52 @@ class Handler(BaseHTTPRequestHandler):
                     for _, event_type, data in pending:
                         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
                         send_chunk(f"event: {event_type}\ndata: ".encode("ascii") + payload + b"\n\n")
+                else:
+                    send_chunk(b": keepalive\n\n")
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return
+
+    def serve_reflector_events(self):
+        ensure_reflector_stream()
+        self.close_connection = True
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache, no-store")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("Transfer-Encoding", "chunked")
+        self.send_header("X-Accel-Buffering", "no")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+        self.end_headers()
+
+        def send_chunk(payload):
+            self.wfile.write(f"{len(payload):X}\r\n".encode("ascii"))
+            self.wfile.write(payload)
+            self.wfile.write(b"\r\n")
+            self.wfile.flush()
+
+        try:
+            with REFLECTOR_EVENT_CONDITION:
+                sequence = REFLECTOR_EVENT_SEQUENCE
+                initial_state = REFLECTOR_STREAM_STATE
+            initial = json.dumps(initial_state, ensure_ascii=False).encode("utf-8")
+            send_chunk(b"event: reflector\ndata: " + initial + b"\n\n")
+            while True:
+                with REFLECTOR_EVENT_CONDITION:
+                    REFLECTOR_EVENT_CONDITION.wait_for(
+                        lambda: REFLECTOR_EVENT_SEQUENCE > sequence,
+                        timeout=5,
+                    )
+                    pending = [event for event in REFLECTOR_EVENTS if event[0] > sequence]
+                    if pending:
+                        sequence = pending[-1][0]
+                if pending:
+                    for _, state in pending:
+                        payload = json.dumps(state, ensure_ascii=False).encode("utf-8")
+                        send_chunk(b"event: reflector\ndata: " + payload + b"\n\n")
                 else:
                     send_chunk(b": keepalive\n\n")
         except (BrokenPipeError, ConnectionResetError, OSError):
