@@ -534,6 +534,7 @@ def status_data():
     monitor_tgs, monitor_tgs_error = read_monitor_tgs()
     service, active = service_status()
     radio = radio_state_snapshot()
+    pty_checks = check_pty_status(active)
     errors = sum(1 for line in lines if re.search(r"ERROR|FATAL|CRITICAL", line, re.I))
     warnings = sum(1 for line in lines if re.search(r"WARNING|UDP frame\\(s\\) lost", line, re.I))
     events = sum(1 for line in lines if re.search(r"ReflectorLogic|Talker start|Talker stop|Node joined|Node left|Selecting TG", line, re.I))
@@ -542,6 +543,7 @@ def status_data():
             "monitor_tgs": monitor_tgs,
             "monitor_tgs_error": monitor_tgs_error,
             "radio": radio,
+            "pty_checks": pty_checks,
             "errors": errors, "warnings": warnings, "events": events}
 
 def read_config_sections():
@@ -586,6 +588,73 @@ def read_config_callsign():
         if callsign:
             return callsign
     return ""
+
+def check_pty_status(service_active):
+    try:
+        sections = read_config_sections()
+    except (OSError, UnicodeError) as exc:
+        return [{"variable": "svxlink.conf", "logic": None, "path": CONFIG_FILE,
+                 "reason": f"Kunde inte läsa konfigurationen: {exc}"}]
+
+    active_logic = read_active_logic(sections)
+    if active_logic is None:
+        return [{"variable": "LOGICS", "logic": None, "path": None,
+                 "reason": "Ingen aktiv simplex- eller repeaterlogik hittades i [GLOBAL] LOGICS."}]
+
+    logic_name, logic = active_logic
+    issues = []
+    pty_settings = (
+        ("DTMF_CTRL_PTY", DTMF_PTY, os.W_OK),
+        ("STATE_PTY", logic.get("STATE_PTY", "").strip().strip('"\'') or None, os.R_OK),
+    )
+    for variable, configured_path, access_mode in pty_settings:
+        if not configured_path:
+            issues.append({
+                "variable": variable,
+                "logic": logic_name,
+                "path": None,
+                "reason": f"{variable} saknas eller är kommenterad i [{logic_name}].",
+            })
+            continue
+        if variable == "DTMF_CTRL_PTY":
+            config_path = logic.get(variable, "").strip().strip('"\'')
+            if not config_path:
+                issues.append({
+                    "variable": variable,
+                    "logic": logic_name,
+                    "path": configured_path,
+                    "reason": f"{variable} saknas eller är kommenterad i [{logic_name}].",
+                })
+                continue
+            if os.path.normpath(config_path) != os.path.normpath(configured_path):
+                issues.append({
+                    "variable": variable,
+                    "logic": logic_name,
+                    "path": configured_path,
+                    "reason": f"Panelen använder {configured_path}, men [{logic_name}] anger {config_path}. Sökvägarna måste vara samma.",
+                })
+                continue
+        if not service_active:
+            continue
+        try:
+            os.stat(configured_path)
+        except OSError as exc:
+            issues.append({
+                "variable": variable,
+                "logic": logic_name,
+                "path": configured_path,
+                "reason": f"{configured_path} är inte aktiv eller kan inte nås: {exc.strerror or exc}.",
+            })
+            continue
+        if not os.access(configured_path, access_mode):
+            permission = "skrivbar" if access_mode == os.W_OK else "läsbar"
+            issues.append({
+                "variable": variable,
+                "logic": logic_name,
+                "path": configured_path,
+                "reason": f"Paneltjänsten saknar behörighet att använda {configured_path}; sökvägen måste vara {permission} för användaren svxlink.",
+            })
+    return issues
 
 def reset_state_pty_cache():
     fd = STATE_PTY_CACHE["fd"]

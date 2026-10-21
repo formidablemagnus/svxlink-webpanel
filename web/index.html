@@ -4,6 +4,14 @@
 <title>SvxLink Control__CALLSIGN_SUFFIX__ v__VERSION__</title>
 </head><body><main>
 <header><div><h1>SvxLink Control__CALLSIGN_SUFFIX__ <span class="muted">v__VERSION__</span></h1><div class="muted">Status, händelser och loggar</div></div><div class="header-meta muted">Status var 1:e sekund<br>Reflektor var 15:e sekund</div></header>
+<dialog class="pty-warning" id="pty-warning" aria-labelledby="pty-warning-title">
+<h2 id="pty-warning-title">SvxLink-PTY behöver konfigureras</h2>
+<p id="pty-warning-summary"></p>
+<ul id="pty-warning-issues"></ul>
+<p>Lägg till eller avkommentera inställningarna i rätt logiksektion i <code>svxlink.conf</code>. Kontrollera att <code>DTMF_CTRL_PTY</code> har samma sökväg som panelens <code>SVXLINK_DTMF_PTY</code>, spara och starta om SvxLink.</p>
+<pre id="pty-warning-example"></pre>
+<div class="toolbar"><a class="button-link" href="/config">Öppna konfiguration</a><button id="pty-warning-close" type="button">Stäng</button></div>
+</dialog>
 <nav class="page-nav" aria-label="Huvudmeny"><a href="/" aria-current="page">Översikt</a><a href="/schedules">Schemaläggning</a><a href="/config">Konfiguration</a></nav>
 <div class="status-grid" aria-label="Statusöversikt">
 <section class="card status-card"><div class="status-caption">SvxLink-tjänst</div><div class="status-value" id="service"><span class="dot" aria-hidden="true"></span>Hämtar…</div><div class="service-controls"><button id="service-start" class="service-button" type="button" disabled>Starta</button><button id="service-stop" class="service-button danger-button" type="button" disabled>Stoppa</button></div><div class="muted service-result" id="service-result" role="status" aria-live="polite"></div></section>

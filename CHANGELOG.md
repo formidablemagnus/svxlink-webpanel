@@ -7,6 +7,7 @@
 - Läser `STATE_PTY` kontinuerligt och skickar radiolägesändringar direkt till webbläsaren så att korta sändningsfönster inte försvinner mellan statuspollningar.
 - Följer loggfilen inkrementellt och skickar nya kompletta loggrader direkt till webbläsaren.
 - Uppdaterar övrig status en gång per sekund; reflektorhämtningen ligger kvar på 15 sekunder.
+- Kontrollerar `DTMF_CTRL_PTY` och `STATE_PTY` och visar instruktioner när någon inställning saknas eller sökvägen inte fungerar.
 
 ## [1.5.0] - 2026-10-20
 

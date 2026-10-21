@@ -2,6 +2,7 @@ let allLines=[],currentTG='';
 let serviceActionPending=false;
 let pendingLogLines=[],logRenderTimer=null;
 let logStreamReady=false;
+let dismissedPtyWarning='',activePtyWarningSignature='';
 function level(s){if(/ERROR|FATAL|CRITICAL/i.test(s))return'err';if(/WARNING|UDP frame\(s\) lost/i.test(s))return'warn';if(/ReflectorLogic|Talker start|Talker stop|Node joined|Node left|Selecting TG/i.test(s))return'event';return'';}
 function renderLogs(){const f=$('filter').value.toLowerCase(),k=$('kind').value;
  const filtered=allLines.filter(s=>(!f||s.toLowerCase().includes(f))&&(k==='all'||(k==='error'&&level(s)==='err')||(k==='warn'&&level(s)==='warn')||(k==='event'&&level(s)==='event')));
@@ -39,10 +40,32 @@ function updateRadio(radio){
  $('radio-signal-fill').style.width=signalLevel+'%';
  $('radio-state-error').textContent=state.error||'';
 }
+function updatePtyWarning(issues){
+ const dialog=$('pty-warning'),currentIssues=Array.isArray(issues)?issues:[];
+ if(!currentIssues.length){
+  dismissedPtyWarning='';activePtyWarningSignature='';
+  if(dialog.open)dialog.close();
+  return;
+ }
+ const signature=JSON.stringify(currentIssues);
+ activePtyWarningSignature=signature;
+ $('pty-warning-summary').textContent='DTMF- och radiostatusfunktionerna kan vara begränsade tills PTY-inställningarna är aktiva.';
+ $('pty-warning-issues').innerHTML=currentIssues.map(issue=>'<li><strong>'+esc(issue.variable)+(issue.logic?' ['+esc(issue.logic)+']':'')+'</strong>: '+esc(issue.reason)+'</li>').join('');
+ const logic=currentIssues.find(issue=>issue.logic)?.logic||'SimplexLogic';
+ const configUnavailable=currentIssues.some(issue=>issue.variable==='svxlink.conf'||issue.variable==='LOGICS');
+ const hasDtmf=configUnavailable||currentIssues.some(issue=>issue.variable==='DTMF_CTRL_PTY');
+ const hasState=configUnavailable||currentIssues.some(issue=>issue.variable==='STATE_PTY');
+ const examples=[];
+ if(hasDtmf)examples.push('DTMF_CTRL_PTY=/dev/shm/dtmf_ctrl');
+ if(hasState)examples.push('STATE_PTY=/var/run/svxlink/state');
+ $('pty-warning-example').textContent='['+logic+']\n'+examples.join('\n');
+ if(signature!==dismissedPtyWarning&&!dialog.open)dialog.showModal();
+}
 async function update(){try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);const d=await r.json();
  $('service').innerHTML='<span class="dot '+(d.active?'ok':'bad')+'"></span>'+esc(d.service_status);
  $('service-start').disabled=d.active||serviceActionPending;$('service-stop').disabled=!d.active||serviceActionPending;
  updateRadio(d.radio);
+ updatePtyWarning(d.pty_checks);
  $('tg').textContent=d.tg_event||'Ingen identifierad händelse';$('tgtime').textContent=d.tg_time||'';
  currentTG=d.current_tg||'';$('currenttg').textContent=currentTG ? ('TG '+currentTG) : 'Okänd';
  $('monitor-tgs').textContent=d.monitor_tgs_error?'Kunde inte läsa konfigurationen':(d.monitor_tgs&&d.monitor_tgs.length?d.monitor_tgs.map(tg=>'TG '+tg).join(' · '):'Inga permanent monitorerade talgrupper');
@@ -129,6 +152,8 @@ $('senddtmf').addEventListener('click',()=>{
 });
 $('customdtmf').addEventListener('keydown',e=>{if(e.key==='Enter')$('senddtmf').click();});
 $('filter').addEventListener('input',renderLogs);$('kind').addEventListener('change',renderLogs);$('refresh').addEventListener('click',update);
+$('pty-warning-close').addEventListener('click',()=>{dismissedPtyWarning=activePtyWarningSignature;$('pty-warning').close();});
+$('pty-warning').addEventListener('close',()=>{if(activePtyWarningSignature)dismissedPtyWarning=activePtyWarningSignature;});
 const radioEvents=new EventSource('/api/radio-events');
 radioEvents.addEventListener('radio',event=>{try{updateRadio(JSON.parse(event.data));}catch(error){$('radio-state-error').textContent='Kunde inte läsa radiostatusströmmen.';}});
 const logEvents=new EventSource('/api/log-events');
