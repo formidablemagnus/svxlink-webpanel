@@ -4,6 +4,8 @@
 
 ### Added
 - Visar RX/TX-läge och mottagen signalstyrka från `STATE_PTY` för den aktiva logiken.
+- Läser `STATE_PTY` kontinuerligt och skickar radiolägesändringar direkt till webbläsaren så att korta sändningsfönster inte försvinner mellan statuspollningar.
+- Följer loggfilen inkrementellt och skickar nya kompletta loggrader direkt till webbläsaren.
 
 ## [1.5.0] - 2026-10-20
 

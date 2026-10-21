@@ -1,25 +1,51 @@
 let allLines=[],currentTG='';
 let serviceActionPending=false;
+let pendingLogLines=[],logRenderTimer=null;
+let logStreamReady=false;
 function level(s){if(/ERROR|FATAL|CRITICAL/i.test(s))return'err';if(/WARNING|UDP frame\(s\) lost/i.test(s))return'warn';if(/ReflectorLogic|Talker start|Talker stop|Node joined|Node left|Selecting TG/i.test(s))return'event';return'';}
 function renderLogs(){const f=$('filter').value.toLowerCase(),k=$('kind').value;
  const filtered=allLines.filter(s=>(!f||s.toLowerCase().includes(f))&&(k==='all'||(k==='error'&&level(s)==='err')||(k==='warn'&&level(s)==='warn')||(k==='event'&&level(s)==='event')));
  $('logs').innerHTML=filtered.slice().reverse().map(s=>'<div class="logline '+level(s)+'">'+esc(s)+'</div>').join('')||'Inga loggrader matchar filtret.';
  $('log-count').textContent=filtered.length+' träff'+(filtered.length===1?'':'ar');
+ const errors=allLines.filter(s=>level(s)==='err').length,warnings=allLines.filter(s=>level(s)==='warn').length,events=allLines.filter(s=>level(s)==='event').length;
+ $('counts').textContent=errors+' · '+warnings+' · '+events;
  }
+function appendLogLine(line){
+ if(typeof line!=='string'||!line)return;
+ pendingLogLines.push(line);
+ if(logRenderTimer!==null)return;
+ logRenderTimer=setTimeout(()=>{
+  allLines.push(...pendingLogLines);pendingLogLines=[];logRenderTimer=null;
+  if(allLines.length>250)allLines=allLines.slice(-250);
+  renderLogs();
+  const now=new Date().toLocaleTimeString('sv-SE');
+  $('updated').textContent='Logg uppdaterad '+now+' · visar '+allLines.length+' senaste loggrader';
+ },100);
+}
+function applyLogSnapshot(snapshot){
+ logStreamReady=true;
+ pendingLogLines=[];if(logRenderTimer!==null){clearTimeout(logRenderTimer);logRenderTimer=null;}
+ allLines=Array.isArray(snapshot.lines)?snapshot.lines.slice(-250):[];
+ if(snapshot.error)allLines.push(snapshot.error);
+ allLines=allLines.slice(-250);renderLogs();
+}
+function updateRadio(radio){
+ const state=radio||{},radioModes={tx:['transmit','TX'],rx:['ok','RX'],idle:['','Vila'],unknown:['','Okänd']},radioMode=radioModes[state.mode]||radioModes.unknown;
+ $('radio-mode').innerHTML='<span class="dot '+radioMode[0]+'"></span>'+radioMode[1];
+ $('radio-signal').textContent=state.mode==='rx'&&Number.isInteger(state.signal_level)?'Signalstyrka: '+state.signal_level+' %':'Signalstyrka visas vid RX.';
+ $('radio-state-error').textContent=state.error||'';
+}
 async function update(){try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);const d=await r.json();
  $('service').innerHTML='<span class="dot '+(d.active?'ok':'bad')+'"></span>'+esc(d.service_status);
  $('service-start').disabled=d.active||serviceActionPending;$('service-stop').disabled=!d.active||serviceActionPending;
- const radio=d.radio||{},radioModes={tx:['transmit','TX'],rx:['ok','RX'],idle:['','Vila'],unknown:['','Okänd']},radioMode=radioModes[radio.mode]||radioModes.unknown;
- $('radio-mode').innerHTML='<span class="dot '+radioMode[0]+'"></span>'+radioMode[1];
- $('radio-signal').textContent=radio.mode==='rx'&&Number.isInteger(radio.signal_level)?'Signalstyrka: '+radio.signal_level+' %':'Signalstyrka visas vid RX.';
- $('radio-state-error').textContent=radio.error||'';
+ updateRadio(d.radio);
  $('tg').textContent=d.tg_event||'Ingen identifierad händelse';$('tgtime').textContent=d.tg_time||'';
  currentTG=d.current_tg||'';$('currenttg').textContent=currentTG ? ('TG '+currentTG) : 'Okänd';
  $('monitor-tgs').textContent=d.monitor_tgs_error?'Kunde inte läsa konfigurationen':(d.monitor_tgs&&d.monitor_tgs.length?d.monitor_tgs.map(tg=>'TG '+tg).join(' · '):'Inga permanent monitorerade talgrupper');
  $('monitor-tgs-error').textContent=d.monitor_tgs_error||'Läses från svxlink.conf';
  document.querySelectorAll('[data-live-tg]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.liveTg)===String(currentTG)));
  $('counts').textContent=d.errors+' · '+d.warnings+' · '+d.events;
- allLines=d.lines||[];renderLogs();const now=new Date().toLocaleTimeString('sv-SE');$('status-updated').textContent=now;$('updated').textContent='Uppdaterad '+now+' · visar '+allLines.length+' senaste loggrader';
+ if(!logStreamReady)allLines=d.lines||[];renderLogs();const now=new Date().toLocaleTimeString('sv-SE');$('status-updated').textContent=now;$('updated').textContent='Uppdaterad '+now+' · visar '+allLines.length+' senaste loggrader';
  }catch(e){$('service').innerHTML='<span class="dot bad"></span>Kan inte läsa status';$('status-updated').textContent='Fel';$('updated').textContent='Fel vid uppdatering: '+e.message;}}
 async function updateReflector(){
  try{
@@ -99,4 +125,10 @@ $('senddtmf').addEventListener('click',()=>{
 });
 $('customdtmf').addEventListener('keydown',e=>{if(e.key==='Enter')$('senddtmf').click();});
 $('filter').addEventListener('input',renderLogs);$('kind').addEventListener('change',renderLogs);$('refresh').addEventListener('click',update);
+const radioEvents=new EventSource('/api/radio-events');
+radioEvents.addEventListener('radio',event=>{try{updateRadio(JSON.parse(event.data));}catch(error){$('radio-state-error').textContent='Kunde inte läsa radiostatusströmmen.';}});
+const logEvents=new EventSource('/api/log-events');
+logEvents.addEventListener('log-snapshot',event=>{try{applyLogSnapshot(JSON.parse(event.data));}catch(error){$('updated').textContent='Kunde inte läsa loggströmmen.';}});
+logEvents.addEventListener('log-reset',event=>{try{applyLogSnapshot(JSON.parse(event.data));}catch(error){$('updated').textContent='Kunde inte uppdatera loggströmmen.';}});
+logEvents.addEventListener('log-line',event=>{try{appendLogLine(JSON.parse(event.data));}catch(error){$('updated').textContent='Kunde inte läsa loggrad från strömmen.';}});
 loadButtons();update();updateReflector();setInterval(update,5000);setInterval(updateReflector,15000);

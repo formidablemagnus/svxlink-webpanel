@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """SvxLink status and log web panel. Python standard library only."""
 import base64
+from collections import deque
 import html
 import hmac
 import json
@@ -41,6 +42,24 @@ STATE_PTY_CACHE = {
     "receivers": {},
     "transmitters": {},
     "seen": False,
+}
+RADIO_EVENT_CONDITION = threading.Condition()
+RADIO_EVENT_SEQUENCE = 0
+RADIO_EVENTS = deque(maxlen=256)
+RADIO_STATE = {"mode": "unknown", "signal_level": None, "error": "Väntar på status från SvxLink."}
+RADIO_READER_STARTED = False
+LOG_EVENT_CONDITION = threading.Condition()
+LOG_EVENT_SEQUENCE = 0
+LOG_EVENTS = deque(maxlen=1024)
+LOG_TAIL_LOCK = threading.Lock()
+LOG_TAIL_STATE = {
+    "initialized": False,
+    "file": None,
+    "identity": None,
+    "offset": 0,
+    "buffer": b"",
+    "lines": deque(maxlen=MAX_LINES),
+    "error": None,
 }
 CRONTAB_LOCK = threading.Lock()
 CONFIG_HELPER = "/usr/local/libexec/svxlink-webpanel-config"
@@ -128,6 +147,124 @@ def read_log():
         return lines[-MAX_LINES:]
     except Exception as e:
         return [f"Kunde inte läsa loggfilen {LOGFILE}: {e}"]
+
+def clean_log_line(raw_line):
+    text = raw_line.decode("utf-8", errors="replace")
+    cleaned = "".join(ch if ch in "\t" or ord(ch) >= 32 else " " for ch in text).strip()
+    return cleaned
+
+def publish_log_lines(lines):
+    global LOG_EVENT_SEQUENCE
+    if not lines:
+        return
+    with LOG_EVENT_CONDITION:
+        for line in lines:
+            LOG_EVENT_SEQUENCE += 1
+            LOG_EVENTS.append((LOG_EVENT_SEQUENCE, "log-line", line))
+        LOG_EVENT_CONDITION.notify_all()
+
+def publish_log_snapshot(lines, error=None, event_type="log-snapshot"):
+    global LOG_EVENT_SEQUENCE
+    with LOG_EVENT_CONDITION:
+        LOG_EVENT_SEQUENCE += 1
+        LOG_EVENTS.append((
+            LOG_EVENT_SEQUENCE,
+            event_type,
+            {"lines": list(lines), "error": error},
+        ))
+        LOG_EVENT_CONDITION.notify_all()
+
+def load_log_tail(file_obj, file_size):
+    offset = max(0, file_size - MAX_LOG_BYTES)
+    file_obj.seek(offset)
+    raw = file_obj.read(MAX_LOG_BYTES)
+    if offset:
+        first_newline = raw.find(b"\n")
+        raw = raw[first_newline + 1:] if first_newline >= 0 else b""
+    lines = []
+    for raw_line in raw.splitlines():
+        line = clean_log_line(raw_line)
+        if line:
+            lines.append(line)
+    return file_obj.tell(), deque(lines[-MAX_LINES:], maxlen=MAX_LINES)
+
+def initialize_log_tail():
+    with LOG_TAIL_LOCK:
+        if LOG_TAIL_STATE["initialized"]:
+            return
+        try:
+            file_obj = open(LOGFILE, "rb")
+            stat = os.fstat(file_obj.fileno())
+            offset, lines = load_log_tail(file_obj, stat.st_size)
+            LOG_TAIL_STATE.update({
+                "file": file_obj,
+                "identity": (stat.st_dev, stat.st_ino),
+                "offset": stat.st_size,
+                "buffer": b"",
+                "lines": lines,
+                "error": None,
+                "initialized": True,
+            })
+        except OSError as exc:
+            LOG_TAIL_STATE.update({
+                "file": None,
+                "identity": None,
+                "offset": 0,
+                "buffer": b"",
+                "error": f"Kunde inte läsa loggfilen {LOGFILE}: {exc}",
+                "initialized": True,
+            })
+
+def read_log_tail_updates():
+    initialize_log_tail()
+    new_lines = []
+    reset_snapshot = None
+    with LOG_TAIL_LOCK:
+        try:
+            path_stat = os.stat(LOGFILE)
+            identity = (path_stat.st_dev, path_stat.st_ino)
+            if LOG_TAIL_STATE["file"] is None or identity != LOG_TAIL_STATE["identity"]:
+                if LOG_TAIL_STATE["file"] is not None:
+                    LOG_TAIL_STATE["file"].close()
+                LOG_TAIL_STATE["file"] = open(LOGFILE, "rb")
+                LOG_TAIL_STATE["identity"] = identity
+                LOG_TAIL_STATE["offset"] = 0
+                LOG_TAIL_STATE["buffer"] = b""
+                current_size = os.fstat(LOG_TAIL_STATE["file"].fileno()).st_size
+                LOG_TAIL_STATE["offset"], LOG_TAIL_STATE["lines"] = load_log_tail(LOG_TAIL_STATE["file"], current_size)
+                reset_snapshot = list(LOG_TAIL_STATE["lines"])
+
+            file_obj = LOG_TAIL_STATE["file"]
+            current_size = os.fstat(file_obj.fileno()).st_size
+            if current_size < LOG_TAIL_STATE["offset"]:
+                LOG_TAIL_STATE["offset"], LOG_TAIL_STATE["lines"] = load_log_tail(file_obj, current_size)
+                LOG_TAIL_STATE["buffer"] = b""
+                reset_snapshot = list(LOG_TAIL_STATE["lines"])
+            elif current_size > LOG_TAIL_STATE["offset"]:
+                file_obj.seek(LOG_TAIL_STATE["offset"])
+                raw = file_obj.read(min(current_size - LOG_TAIL_STATE["offset"], MAX_LOG_BYTES))
+                LOG_TAIL_STATE["offset"] = file_obj.tell()
+                LOG_TAIL_STATE["buffer"] += raw
+                pending = LOG_TAIL_STATE["buffer"].split(b"\n")
+                LOG_TAIL_STATE["buffer"] = pending.pop()
+                for raw_line in pending:
+                    line = clean_log_line(raw_line)
+                    if line:
+                        LOG_TAIL_STATE["lines"].append(line)
+                        new_lines.append(line)
+            LOG_TAIL_STATE["error"] = None
+        except OSError as exc:
+            LOG_TAIL_STATE["error"] = f"Kunde inte läsa loggfilen {LOGFILE}: {exc}"
+
+        if reset_snapshot is not None:
+            publish_log_snapshot(reset_snapshot, LOG_TAIL_STATE["error"], "log-reset")
+        elif new_lines:
+            publish_log_lines(new_lines)
+
+def log_tail_snapshot():
+    initialize_log_tail()
+    with LOG_TAIL_LOCK:
+        return list(LOG_TAIL_STATE["lines"]), LOG_TAIL_STATE["error"]
 
 def latest_match(lines, pattern, formatter):
     rx = re.compile(pattern, re.IGNORECASE)
@@ -382,6 +519,7 @@ def send_dtmf(command):
         return {"ok": False, "error": f"Kunde inte skriva till {DTMF_PTY}: {exc}"}, 500
 
 def status_data():
+    ensure_radio_reader()
     lines = read_log()
     tg, tgtime = latest_match(
         lines, r"(Talker start|Talker stop) on TG #(24075|2407|2406|2405|2404|2403|2402|2401|2400|240|9)(?:[0-9]{3})?:\s*([^\s\x00]+)?",
@@ -393,7 +531,7 @@ def status_data():
     )
     monitor_tgs, monitor_tgs_error = read_monitor_tgs()
     service, active = service_status()
-    radio = read_radio_state(active)
+    radio = radio_state_snapshot()
     errors = sum(1 for line in lines if re.search(r"ERROR|FATAL|CRITICAL", line, re.I))
     warnings = sum(1 for line in lines if re.search(r"WARNING|UDP frame\\(s\\) lost", line, re.I))
     events = sum(1 for line in lines if re.search(r"ReflectorLogic|Talker start|Talker stop|Node joined|Node left|Selecting TG", line, re.I))
@@ -460,31 +598,93 @@ def reset_state_pty_cache():
     if fd is not None:
         os.close(fd)
 
+def publish_radio_state(state):
+    global RADIO_EVENT_SEQUENCE, RADIO_STATE
+    with RADIO_EVENT_CONDITION:
+        if state == RADIO_STATE:
+            return
+        RADIO_STATE = state
+        RADIO_EVENT_SEQUENCE += 1
+        RADIO_EVENTS.append((RADIO_EVENT_SEQUENCE, state))
+        RADIO_EVENT_CONDITION.notify_all()
+
+def current_radio_state(parse_error=None):
+    if not STATE_PTY_CACHE["seen"]:
+        return {"mode": "unknown", "signal_level": None, "error": parse_error or "Väntar på status från SvxLink."}
+
+    receiving_levels = [
+        receiver["siglev"]
+        for receiver in STATE_PTY_CACHE["receivers"].values()
+        if receiver["receiving"]
+    ]
+    if any(STATE_PTY_CACHE["transmitters"].values()):
+        mode = "tx"
+        signal_level = None
+    elif receiving_levels:
+        mode = "rx"
+        signal_level = max(receiving_levels)
+    else:
+        mode = "idle"
+        signal_level = None
+    return {"mode": mode, "signal_level": signal_level, "error": parse_error}
+
+def radio_state_snapshot():
+    with RADIO_EVENT_CONDITION:
+        return RADIO_STATE
+
+def radio_reader_loop():
+    service_checked_at = 0
+    service_active = False
+    while True:
+        now = time.monotonic()
+        if now >= service_checked_at:
+            _, service_active = service_status()
+            service_checked_at = now + 1
+        read_radio_state(service_active)
+        read_log_tail_updates()
+        time.sleep(0.05)
+
+def ensure_radio_reader():
+    global RADIO_READER_STARTED
+    with RADIO_EVENT_CONDITION:
+        if RADIO_READER_STARTED:
+            return
+        RADIO_READER_STARTED = True
+    threading.Thread(target=radio_reader_loop, name="svxlink-state-reader", daemon=True).start()
+
 def read_radio_state(service_active):
     if not service_active:
         with STATE_PTY_LOCK:
             reset_state_pty_cache()
-        return {"mode": "unknown", "signal_level": None, "error": "SvxLink-tjänsten är stoppad."}
+        state = {"mode": "unknown", "signal_level": None, "error": "SvxLink-tjänsten är stoppad."}
+        publish_radio_state(state)
+        return state
 
     try:
         sections = read_config_sections()
     except (OSError, UnicodeError) as exc:
         with STATE_PTY_LOCK:
             reset_state_pty_cache()
-        return {"mode": "unknown", "signal_level": None, "error": f"Kunde inte läsa {CONFIG_FILE}: {exc}"}
+        state = {"mode": "unknown", "signal_level": None, "error": f"Kunde inte läsa {CONFIG_FILE}: {exc}"}
+        publish_radio_state(state)
+        return state
 
     active_logic = read_active_logic(sections)
     if active_logic is None:
         with STATE_PTY_LOCK:
             reset_state_pty_cache()
-        return {"mode": "unknown", "signal_level": None, "error": "Ingen aktiv simplex- eller repeaterlogik hittades i [GLOBAL] LOGICS."}
+        state = {"mode": "unknown", "signal_level": None, "error": "Ingen aktiv simplex- eller repeaterlogik hittades i [GLOBAL] LOGICS."}
+        publish_radio_state(state)
+        return state
 
     logic_name, logic = active_logic
     state_pty = logic.get("STATE_PTY", "").strip().strip('"\'')
     if not state_pty:
         with STATE_PTY_LOCK:
             reset_state_pty_cache()
-        return {"mode": "unknown", "signal_level": None, "error": f"STATE_PTY saknas i [{logic_name}]."}
+        state = {"mode": "unknown", "signal_level": None, "error": f"STATE_PTY saknas i [{logic_name}]."}
+        publish_radio_state(state)
+        return state
 
     key = (logic_name, state_pty)
     with STATE_PTY_LOCK:
@@ -510,7 +710,9 @@ def read_radio_state(service_active):
                 remaining -= len(chunk)
         except OSError as exc:
             reset_state_pty_cache()
-            return {"mode": "unknown", "signal_level": None, "error": f"Kunde inte läsa STATE_PTY {state_pty}: {exc}"}
+            state = {"mode": "unknown", "signal_level": None, "error": f"Kunde inte läsa STATE_PTY {state_pty}: {exc}"}
+            publish_radio_state(state)
+            return state
 
         buffer = STATE_PTY_CACHE["buffer"]
         state_lines = buffer.split(b"\n")
@@ -558,27 +760,13 @@ def read_radio_state(service_active):
                             "siglev": max(0, min(receiver["siglev"], 100)),
                         }
                 STATE_PTY_CACHE["seen"] = True
+                publish_radio_state(current_radio_state())
             except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
                 parse_error = f"Kunde inte tolka status från STATE_PTY: {exc}"
 
-        if not STATE_PTY_CACHE["seen"]:
-            return {"mode": "unknown", "signal_level": None, "error": parse_error or "Väntar på status från SvxLink."}
-
-        receiving_levels = [
-            receiver["siglev"]
-            for receiver in STATE_PTY_CACHE["receivers"].values()
-            if receiver["receiving"]
-        ]
-        if any(STATE_PTY_CACHE["transmitters"].values()):
-            mode = "tx"
-            signal_level = None
-        elif receiving_levels:
-            mode = "rx"
-            signal_level = max(receiving_levels)
-        else:
-            mode = "idle"
-            signal_level = None
-        return {"mode": mode, "signal_level": signal_level, "error": parse_error}
+        state = current_radio_state(parse_error)
+        publish_radio_state(state)
+        return state
 
 def read_monitor_tgs():
     section_found = False
@@ -656,6 +844,7 @@ def reflector_status_data():
 
 
 class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
     server_version = "SvxLinkWebPanel"
     sys_version = ""
     def log_message(self, fmt, *args):
@@ -678,6 +867,12 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return
         path = urlparse(self.path).path
+        if path == "/api/radio-events":
+            self.serve_radio_events()
+            return
+        if path == "/api/log-events":
+            self.serve_log_events()
+            return
         if path == "/":
             filename, content_type = "index.html", "text/html; charset=utf-8"
         elif path in ("/schedules", "/schedules/"):
@@ -755,6 +950,102 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def serve_radio_events(self):
+        ensure_radio_reader()
+        self.close_connection = True
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache, no-store")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("Transfer-Encoding", "chunked")
+        self.send_header("X-Accel-Buffering", "no")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+        self.end_headers()
+
+        def send_chunk(payload):
+            self.wfile.write(f"{len(payload):X}\r\n".encode("ascii"))
+            self.wfile.write(payload)
+            self.wfile.write(b"\r\n")
+            self.wfile.flush()
+
+        try:
+            with RADIO_EVENT_CONDITION:
+                sequence = RADIO_EVENT_SEQUENCE
+                initial_state = RADIO_STATE
+            initial = json.dumps(initial_state, ensure_ascii=False).encode("utf-8")
+            send_chunk(b"event: radio\ndata: " + initial + b"\n\n")
+            while True:
+                with RADIO_EVENT_CONDITION:
+                    RADIO_EVENT_CONDITION.wait_for(
+                        lambda: RADIO_EVENT_SEQUENCE > sequence,
+                        timeout=5,
+                    )
+                    pending = [event for event in RADIO_EVENTS if event[0] > sequence]
+                    if pending:
+                        sequence = pending[-1][0]
+                if pending:
+                    for event_sequence, state in pending:
+                        payload = json.dumps(state, ensure_ascii=False).encode("utf-8")
+                        send_chunk(b"event: radio\ndata: " + payload + b"\n\n")
+                else:
+                    send_chunk(b": keepalive\n\n")
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return
+
+    def serve_log_events(self):
+        ensure_radio_reader()
+        initialize_log_tail()
+        self.close_connection = True
+        with LOG_TAIL_LOCK:
+            snapshot = list(LOG_TAIL_STATE["lines"])
+            error = LOG_TAIL_STATE["error"]
+            with LOG_EVENT_CONDITION:
+                sequence = LOG_EVENT_SEQUENCE
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache, no-store")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("Transfer-Encoding", "chunked")
+        self.send_header("X-Accel-Buffering", "no")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+        self.end_headers()
+
+        def send_chunk(payload):
+            self.wfile.write(f"{len(payload):X}\r\n".encode("ascii"))
+            self.wfile.write(payload)
+            self.wfile.write(b"\r\n")
+            self.wfile.flush()
+
+        try:
+            initial = json.dumps({"lines": snapshot, "error": error}, ensure_ascii=False).encode("utf-8")
+            send_chunk(b"event: log-snapshot\ndata: " + initial + b"\n\n")
+            while True:
+                with LOG_EVENT_CONDITION:
+                    LOG_EVENT_CONDITION.wait_for(
+                        lambda: LOG_EVENT_SEQUENCE > sequence,
+                        timeout=5,
+                    )
+                    pending = [event for event in LOG_EVENTS if event[0] > sequence]
+                    if pending:
+                        sequence = pending[-1][0]
+                if pending:
+                    for _, event_type, data in pending:
+                        payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
+                        send_chunk(f"event: {event_type}\ndata: ".encode("ascii") + payload + b"\n\n")
+                else:
+                    send_chunk(b": keepalive\n\n")
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return
 
     def do_POST(self):
         if not self.authorized():
