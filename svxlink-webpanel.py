@@ -33,6 +33,14 @@ REFLECTOR_PROXY_URL = os.environ.get("SVXLINK_REFLECTOR_PROXY_URL", "https://ref
 CRONTAB_COMMAND = "crontab"
 CRONTAB_START = "# BEGIN SVXLINK-WEBPANEL MANAGED SCHEDULES"
 CRONTAB_END = "# END SVXLINK-WEBPANEL MANAGED SCHEDULES"
+STATE_PTY_LOCK = threading.Lock()
+STATE_PTY_CACHE = {
+    "key": None,
+    "buffer": b"",
+    "receivers": {},
+    "transmitters": {},
+    "seen": False,
+}
 CRONTAB_LOCK = threading.Lock()
 CONFIG_HELPER = "/usr/local/libexec/svxlink-webpanel-config"
 MAX_CONFIG_BYTES = 2 * 1024 * 1024
@@ -384,6 +392,7 @@ def status_data():
     )
     monitor_tgs, monitor_tgs_error = read_monitor_tgs()
     service, active = service_status()
+    radio = read_radio_state(active)
     errors = sum(1 for line in lines if re.search(r"ERROR|FATAL|CRITICAL", line, re.I))
     warnings = sum(1 for line in lines if re.search(r"WARNING|UDP frame\\(s\\) lost", line, re.I))
     events = sum(1 for line in lines if re.search(r"ReflectorLogic|Talker start|Talker stop|Node joined|Node left|Selecting TG", line, re.I))
@@ -391,6 +400,7 @@ def status_data():
             "tg_event": tg, "tg_time": tgtime, "current_tg": current_tg,
             "monitor_tgs": monitor_tgs,
             "monitor_tgs_error": monitor_tgs_error,
+            "radio": radio,
             "errors": errors, "warnings": warnings, "events": events}
 
 def read_config_sections():
@@ -411,20 +421,163 @@ def read_config_sections():
             sections[current_section][key.strip()] = value.split("#", 1)[0].split(";", 1)[0].strip()
     return sections
 
+def read_active_logics(sections):
+    active_logics = []
+    logic_names = [name.strip() for name in sections.get("GLOBAL", {}).get("LOGICS", "").split(",") if name.strip()]
+    for logic_name in logic_names:
+        logic = sections.get(logic_name, {})
+        if logic.get("TYPE", "").strip('"\'').lower() in ("simplex", "repeater"):
+            active_logics.append((logic_name, logic))
+    return active_logics
+
+def read_active_logic(sections):
+    active_logics = read_active_logics(sections)
+    return active_logics[0] if active_logics else None
+
 def read_config_callsign():
     try:
         sections = read_config_sections()
     except (OSError, UnicodeError):
         return ""
 
-    logic_names = [name.strip() for name in sections.get("GLOBAL", {}).get("LOGICS", "").split(",") if name.strip()]
-    for logic_name in logic_names:
-        logic = sections.get(logic_name, {})
-        if logic.get("TYPE", "").strip('"\'').lower() in ("simplex", "repeater"):
-            callsign = logic.get("CALLSIGN", "").strip().strip('"\'')
-            if callsign:
-                return callsign
+    for _, logic in read_active_logics(sections):
+        callsign = logic.get("CALLSIGN", "").strip().strip('"\'')
+        if callsign:
+            return callsign
     return ""
+
+def reset_state_pty_cache():
+    STATE_PTY_CACHE.update({
+        "key": None,
+        "buffer": b"",
+        "receivers": {},
+        "transmitters": {},
+        "seen": False,
+    })
+
+def read_radio_state(service_active):
+    if not service_active:
+        with STATE_PTY_LOCK:
+            reset_state_pty_cache()
+        return {"mode": "unknown", "signal_level": None, "error": "SvxLink-tjänsten är stoppad."}
+
+    try:
+        sections = read_config_sections()
+    except (OSError, UnicodeError) as exc:
+        with STATE_PTY_LOCK:
+            reset_state_pty_cache()
+        return {"mode": "unknown", "signal_level": None, "error": f"Kunde inte läsa {CONFIG_FILE}: {exc}"}
+
+    active_logic = read_active_logic(sections)
+    if active_logic is None:
+        with STATE_PTY_LOCK:
+            reset_state_pty_cache()
+        return {"mode": "unknown", "signal_level": None, "error": "Ingen aktiv simplex- eller repeaterlogik hittades i [GLOBAL] LOGICS."}
+
+    logic_name, logic = active_logic
+    state_pty = logic.get("STATE_PTY", "").strip().strip('"\'')
+    if not state_pty:
+        with STATE_PTY_LOCK:
+            reset_state_pty_cache()
+        return {"mode": "unknown", "signal_level": None, "error": f"STATE_PTY saknas i [{logic_name}]."}
+
+    key = (logic_name, state_pty)
+    with STATE_PTY_LOCK:
+        if STATE_PTY_CACHE["key"] != key:
+            STATE_PTY_CACHE.update({
+                "key": key,
+                "buffer": b"",
+                "receivers": {},
+                "transmitters": {},
+                "seen": False,
+            })
+
+        try:
+            fd = os.open(state_pty, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOCTTY", 0))
+            try:
+                remaining = 65536
+                while remaining > 0:
+                    try:
+                        chunk = os.read(fd, min(4096, remaining))
+                    except BlockingIOError:
+                        break
+                    if not chunk:
+                        break
+                    STATE_PTY_CACHE["buffer"] += chunk
+                    remaining -= len(chunk)
+            finally:
+                os.close(fd)
+        except OSError as exc:
+            reset_state_pty_cache()
+            return {"mode": "unknown", "signal_level": None, "error": f"Kunde inte läsa STATE_PTY {state_pty}: {exc}"}
+
+        buffer = STATE_PTY_CACHE["buffer"]
+        state_lines = buffer.split(b"\n")
+        STATE_PTY_CACHE["buffer"] = state_lines.pop()
+        parse_error = None
+        if len(STATE_PTY_CACHE["buffer"]) > 65536:
+            STATE_PTY_CACHE["buffer"] = b""
+            parse_error = "Statusraden från STATE_PTY var för lång."
+
+        for raw_line in state_lines:
+            try:
+                parts = raw_line.decode("utf-8").split(" ", 2)
+                if len(parts) != 3:
+                    continue
+                event_name, payload = parts[1], parts[2]
+                if event_name not in ("Rx:sql_state", "Voter:sql_state", "Tx:state"):
+                    continue
+                data = json.loads(payload)
+                if event_name == "Tx:state":
+                    if not isinstance(data, dict) or not isinstance(data.get("name"), str) or not data["name"] or not isinstance(data.get("transmit"), bool):
+                        raise ValueError("felaktig sändarstatus")
+                    STATE_PTY_CACHE["transmitters"][data["name"]] = data["transmit"]
+                elif event_name == "Rx:sql_state":
+                    if not isinstance(data, dict) or not isinstance(data.get("name"), str) or not data["name"] or not isinstance(data.get("sql_open"), bool):
+                        raise ValueError("felaktig mottagarstatus")
+                    siglev = data.get("siglev")
+                    if not isinstance(siglev, int) or isinstance(siglev, bool):
+                        raise ValueError("ogiltig signalnivå")
+                    STATE_PTY_CACHE["receivers"][data["name"]] = {
+                        "receiving": data["sql_open"],
+                        "siglev": max(0, min(siglev, 100)),
+                    }
+                else:
+                    if not isinstance(data, list):
+                        raise ValueError("felaktig voter-status")
+                    for receiver in data:
+                        if (not isinstance(receiver, dict) or not isinstance(receiver.get("name"), str) or not receiver["name"]
+                                or not isinstance(receiver.get("enabled"), bool)
+                                or not isinstance(receiver.get("sql_open"), bool)
+                                or not isinstance(receiver.get("siglev"), int) or isinstance(receiver["siglev"], bool)
+                                or ("active" in receiver and not isinstance(receiver["active"], bool))):
+                            raise ValueError("felaktig voter-mottagarstatus")
+                        STATE_PTY_CACHE["receivers"][receiver["name"]] = {
+                            "receiving": receiver["enabled"] and (receiver.get("active", False) or receiver["sql_open"]),
+                            "siglev": max(0, min(receiver["siglev"], 100)),
+                        }
+                STATE_PTY_CACHE["seen"] = True
+            except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
+                parse_error = f"Kunde inte tolka status från STATE_PTY: {exc}"
+
+        if not STATE_PTY_CACHE["seen"]:
+            return {"mode": "unknown", "signal_level": None, "error": parse_error or "Väntar på status från SvxLink."}
+
+        receiving_levels = [
+            receiver["siglev"]
+            for receiver in STATE_PTY_CACHE["receivers"].values()
+            if receiver["receiving"]
+        ]
+        if any(STATE_PTY_CACHE["transmitters"].values()):
+            mode = "tx"
+            signal_level = None
+        elif receiving_levels:
+            mode = "rx"
+            signal_level = max(receiving_levels)
+        else:
+            mode = "idle"
+            signal_level = None
+        return {"mode": mode, "signal_level": signal_level, "error": parse_error}
 
 def read_monitor_tgs():
     section_found = False

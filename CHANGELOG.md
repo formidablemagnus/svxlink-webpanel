@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Visar RX/TX-läge och mottagen signalstyrka från `STATE_PTY` för den aktiva logiken.
+
 ## [1.5.0] - 2026-10-20
 
 ### Added
